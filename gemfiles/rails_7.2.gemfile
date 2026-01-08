@@ -6,6 +6,7 @@ source "https://rubygems.org"
 
 gem "activerecord", ">= 7.0"
 gem "appraisal", group: %i[development test]
+gem "debug"
 gem "irb"
 gem "minitest"
 gem "net-imap", ">= 0.6.0"
@@ -13,9 +14,11 @@ gem "rails", "~> 7.2"
 gem "railties", ">= 7.0"
 gem "rake"
 gem "rake-compiler"
+gem "rubocop", require: false
 gem "rubocop-md", require: false
-gem "rubocop-minitest"
-gem "rubocop-rails-omakase", require: false
+gem "rubocop-minitest", require: false
+gem "rubocop-performance", require: false
+gem "rubocop-rake", require: false
 gem "sqlite3"
 
 gemspec path: "../"

@@ -51,7 +51,7 @@ class User < ApplicationRecord
 end
 ```
 
-Disable automatic `:id` generation:
+It is also possible to disable automatic `:id` generation by passing `id: false` to the `snowflake_id` method:
 
 ```ruby
 class Post < ApplicationRecord

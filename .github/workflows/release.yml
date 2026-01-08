@@ -59,7 +59,7 @@ jobs:
           bundler-cache: true
 
       - name: Build gem
-        run: gem build rsnowflake.gemspec
+        run: gem build snowflaked.gemspec
 
       - uses: actions/upload-artifact@v6
         with:

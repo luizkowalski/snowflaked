@@ -42,7 +42,7 @@ jobs:
           cargo-cache: true
 
       - name: Clippy
-        run: cargo clippy --manifest-path ext/rsnowflake/Cargo.toml -- -D warnings
+        run: cargo clippy --manifest-path ext/snowflaked/Cargo.toml -- -D warnings
 
       - name: Rustfmt
-        run: cargo fmt --manifest-path ext/rsnowflake/Cargo.toml --check
+        run: cargo fmt --manifest-path ext/snowflaked/Cargo.toml --check
