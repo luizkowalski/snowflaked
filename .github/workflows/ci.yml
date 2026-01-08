@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ['3.2', '3.3', '3.4', '4.0']
+        rails: ["rails-7.2", "rails-8.0", "rails-8.1"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oxidize-rb/actions/setup-ruby-and-rust@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+          cargo-cache: true
+
+      - name: Install Appraisal
+        run: bundle exec appraisal install
+
+      - name: Compile
+        run: bundle exec appraisal ${{ matrix.rails }} rake compile
+
+      - name: Run tests with Appraisal
+        run: bundle exec appraisal ${{ matrix.rails }} rake test
+
+  lint-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oxidize-rb/actions/setup-ruby-and-rust@v1
+        with:
+          ruby-version: '4.0'
+          bundler-cache: true
+          cargo-cache: true
+
+      - name: Clippy
+        run: cargo clippy --manifest-path ext/rsnowflake/Cargo.toml -- -D warnings
+
+      - name: Rustfmt
+        run: cargo fmt --manifest-path ext/rsnowflake/Cargo.toml --check

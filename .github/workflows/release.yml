@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  ci-data:
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.fetch.outputs.result }}
+    steps:
+      - id: fetch
+        uses: oxidize-rb/actions/fetch-ci-data@v1
+        with:
+          supported-ruby-platforms: |
+            exclude: ['x64-mingw32', 'x64-mingw-ucrt']
+          stable-ruby-versions: |
+            exclude: ['x64-mingw32', 'x64-mingw-ucrt']
+
+  cross-gem:
+    name: Build native gems
+    needs: ci-data
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby-platform: ${{ fromJSON(needs.ci-data.outputs.result).supported-ruby-platforms }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0'
+          bundler-cache: true
+
+      - uses: oxidize-rb/actions/cross-gem@v1
+        with:
+          platform: ${{ matrix.ruby-platform }}
+          ruby-versions: ${{ join(fromJSON(needs.ci-data.outputs.result).stable-ruby-versions, ', ') }}
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: cross-gem-${{ matrix.ruby-platform }}
+          path: pkg/*-${{ matrix.ruby-platform }}.gem
+          if-no-files-found: error
+
+  source-gem:
+    name: Build source gem
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0'
+          bundler-cache: true
+
+      - name: Build gem
+        run: gem build rsnowflake.gemspec
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: source-gem
+          path: '*.gem'
+          if-no-files-found: error
+
+  release:
+    name: Release gems
+    needs: [cross-gem, source-gem]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: gems
+          pattern: '*-gem*'
+          merge-multiple: true
+
+      - name: List gems
+        run: ls -la gems/
+
+      - name: Publish to RubyGems
+        env:
+          RUBYGEMS_API_KEY: ${{ secrets.RUBYGEMS_API_KEY }}
+        run: |-
+          mkdir -p ~/.gem
+          echo -e "---\n:rubygems_api_key: ${RUBYGEMS_API_KEY}" > ~/.gem/credentials
+          chmod 0600 ~/.gem/credentials
+          for gem in gems/*.gem; do
+            echo "Publishing $gem"
+            gem push "$gem" || true
+          done

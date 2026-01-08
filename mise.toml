@@ -1,0 +1,6 @@
+[tools]
+ruby = "4.0.0"
+rust = { version = "1.92.0", profile = "default" }
+
+[tasks]
+test = ["bundle exec rake", "bundle exec rake clobber"]

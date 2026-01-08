@@ -1,0 +1,58 @@
+plugins:
+  - rubocop-md
+  - rubocop-minitest
+  - rubocop-performance
+  - rubocop-rake
+
+AllCops:
+  TargetRubyVersion: 3.2
+  NewCops: enable
+  ActiveSupportExtensionsEnabled: true
+
+# Style
+Style/FrozenStringLiteralComment:
+  Enabled: true
+  EnforcedStyle: always_true
+  SafeAutoCorrect: true
+
+Style/TrailingCommaInHashLiteral:
+  EnforcedStyleForMultiline: comma
+
+Style/TrailingCommaInArrayLiteral:
+  Enabled: true
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+Style/Documentation:
+  Enabled: false
+
+Style/PercentLiteralDelimiters:
+  Enabled: true
+  PreferredDelimiters:
+    default: "()"
+    "%i": "[]"
+    "%I": "[]"
+    "%r": "{}"
+    "%w": "[]"
+    "%W": "[]"
+
+# Layout
+Layout/FirstHashElementIndentation:
+  Enabled: true
+  EnforcedStyle: consistent
+
+Layout/DotPosition:
+  EnforcedStyle: leading
+
+Layout/EndAlignment:
+  Enabled: true
+  EnforcedStyleAlignWith: variable
+  AutoCorrect: true
+
+Layout/LineLength:
+  Enabled: false
+
+# Minitest
+Minitest/MultipleAssertions:
+  Enabled: false
