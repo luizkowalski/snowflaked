@@ -75,7 +75,7 @@ class TestSnowflaked < Minitest::Test
 
   def test_thread_safety
     threads = Array.new(10) do
-      Thread.new { Array.new(100) { Snowflaked.id } }
+      Thread.new { Array.new(100) { Snowflaked.id } } # rubocop:disable ThreadSafety/NewThread -- Intentional
     end
 
     all_ids = threads.flat_map(&:value)
