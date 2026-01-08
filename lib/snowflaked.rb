@@ -1,7 +1,15 @@
 # frozen_string_literal: true
 
 require_relative "snowflaked/version"
-require_relative "snowflaked/snowflaked"
+
+# Load precompiled extension for the current Ruby version
+begin
+  ruby_version = /(\d+\.\d+)/.match(RUBY_VERSION)
+  require "snowflaked/#{ruby_version}/snowflaked"
+rescue LoadError
+  require "snowflaked/snowflaked"
+end
+
 require "socket"
 
 require_relative "snowflaked/railtie" if defined?(Rails::Railtie)
