@@ -10,7 +10,7 @@ appraise "rails-7.2" do
 end
 
 appraise "rails-8.0" do
-  gem "rails", "~> 8.0"
+  gem "rails", "~> 8.0", "< 8.1"
   gem "uri", "1.1.1"
   gem "net-imap", ">= 0.6.0"
 end

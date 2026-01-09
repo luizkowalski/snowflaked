@@ -1,3 +1,97 @@
 module Snowflaked
   VERSION: String
+  MAX_MACHINE_ID: Integer
+
+  class Error < StandardError
+  end
+
+  class ConfigurationError < Error
+  end
+
+  class Configuration
+    attr_accessor machine_id: Integer?
+    attr_accessor epoch: Time?
+
+    def initialize: () -> void
+    def machine_id_value: () -> Integer
+    def epoch_ms: () -> Integer?
+
+    private
+
+    def default_machine_id: () -> Integer
+    def env_machine_id: () -> Integer?
+    def hostname_pid_hash: () -> Integer
+  end
+
+  def self.configuration: () -> Configuration
+  def self.configure: () ?{ (Configuration) -> void } -> Configuration
+  def self.id: () -> Integer
+  def self.parse: (Integer id) -> Hash[Symbol, Integer]
+  def self.timestamp: (Integer id) -> Time
+  def self.machine_id: (Integer id) -> Integer
+  def self.timestamp_ms: (Integer id) -> Integer
+  def self.sequence: (Integer id) -> Integer
+
+  private
+
+  def self.ensure_initialized!: () -> void
+
+  module Native
+    def self.init_generator: (Integer machine_id, Integer? epoch_ms) -> bool
+    def self.generate: () -> Integer
+    def self.parse: (Integer id) -> Hash[Symbol, Integer]
+    def self.timestamp_ms: (Integer id) -> Integer
+    def self.machine_id: (Integer id) -> Integer
+    def self.sequence: (Integer id) -> Integer
+    def self.initialized?: () -> bool
+    def self.configured_machine_id: () -> Integer?
+  end
+
+  module ModelExtensions
+    extend ActiveSupport::Concern
+
+    def self.included: (Class base) -> void
+
+    module ClassMethods
+      def snowflake_id: (*Symbol attributes, ?id: bool) -> void
+      def _snowflake_columns_from_comments: () -> Array[Symbol]
+    end
+
+    private
+
+    def _generate_snowflake_ids: () -> void
+  end
+
+  module Type
+    class Snowflake < ActiveRecord::Type::BigInteger
+      def type: () -> :snowflake
+    end
+  end
+
+  module SchemaDefinitions
+    COMMENT: String
+
+    module TableDefinition
+      def snowflake: (Symbol name, **untyped options) -> void
+    end
+
+    module Table
+      def snowflake: (Symbol name, **untyped options) -> void
+    end
+  end
+
+  module AdapterExtension
+    SNOWFLAKE_TYPE: Hash[Symbol, String]
+
+    def native_database_types: () -> Hash[Symbol, untyped]
+
+    module ClassMethods
+      def native_database_types: () -> Hash[Symbol, untyped]
+    end
+
+    def self.prepended: (Class base) -> void
+  end
+
+  class Railtie < Rails::Railtie
+  end
 end
