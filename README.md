@@ -38,6 +38,7 @@ class CreateUsers < ActiveRecord::Migration[8.1]
   def change
     create_table :users do |t|
       t.snowflake :external_id
+      t.bigint    :uid
     end
   end
 end
@@ -47,7 +48,7 @@ If you want to generate Snowflake IDs for additional columns, you can do so by u
 
 ```ruby
 class User < ApplicationRecord
-  snowflake_id :external_id
+  snowflake_id :uid
 end
 ```
 
