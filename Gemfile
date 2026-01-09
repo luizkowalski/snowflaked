@@ -12,8 +12,8 @@ gem "minitest"
 gem "rake-compiler"
 
 gem "activerecord", ">= 7.0"
+gem "pg"
 gem "railties", ">= 7.0"
-gem "sqlite3"
 
 gem "rubocop", require: false
 gem "rubocop-md", require: false

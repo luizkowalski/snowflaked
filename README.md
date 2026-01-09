@@ -44,6 +44,10 @@ class CreateUsers < ActiveRecord::Migration[8.1]
 end
 ```
 
+Columns created with `t.snowflake` are automatically detected and will have Snowflake IDs generated for them.
+
+> **Note:** SQLite does not support column comments, which Snowflaked uses to auto-detect snowflake columns. When using SQLite, you must explicitly declare snowflake columns using the `snowflake_id` helper in your model.
+
 If you want to generate Snowflake IDs for additional columns, you can do so by using the `snowflake_id` method, without having to migrate the table:
 
 ```ruby

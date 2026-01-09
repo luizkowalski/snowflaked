@@ -9,6 +9,7 @@ gem "appraisal", group: %i[development test]
 gem "debug"
 gem "irb"
 gem "minitest"
+gem "pg"
 gem "rails", "~> 8.1"
 gem "railties", ">= 7.0"
 gem "rake"
@@ -19,6 +20,5 @@ gem "rubocop-minitest", require: false
 gem "rubocop-performance", require: false
 gem "rubocop-rake", require: false
 gem "rubocop-thread_safety", require: false
-gem "sqlite3"
 
 gemspec path: "../"

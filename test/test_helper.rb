@@ -6,13 +6,7 @@ require_relative "dummy/config/environment"
 
 require "minitest/autorun"
 
-ActiveRecord::Schema.define do
-  create_table :users, id: :snowflake, force: true do |t|
-    t.string :name
-    t.snowflake :external_id
-  end
-end
+ActiveRecord::MigrationContext.new("test/dummy/db/migrate").migrate
 
 class User < ActiveRecord::Base
-  snowflake_id :id, :external_id
 end
