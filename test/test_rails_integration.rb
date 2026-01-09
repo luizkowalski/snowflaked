@@ -49,4 +49,16 @@ class TestRailsIntegration < Minitest::Test
   def test_adapter_class_recognizes_snowflake_type
     assert ActiveRecord::Base.connection.valid_type?(:snowflake), "adapter class should recognize snowflake type"
   end
+
+  def test_snowflake_columns_have_comment
+    external_id_column = User.columns_hash["external_id"]
+
+    assert_equal Snowflaked::SchemaDefinitions::COMMENT, external_id_column.comment
+  end
+
+  def test_snowflake_columns_detected_from_comments
+    snowflake_columns = User._snowflake_columns_from_comments
+
+    assert_includes snowflake_columns, :external_id
+  end
 end

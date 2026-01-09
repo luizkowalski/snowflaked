@@ -1,3 +1,6 @@
 test:
-  adapter: sqlite3
-  database: ":memory:"
+  adapter: postgresql
+  database: snowflaked_test
+  host: <%= ENV.fetch("POSTGRES_HOST", "localhost") %>
+  username: <%= ENV.fetch("POSTGRES_USER", ENV["USER"]) %>
+  password: <%= ENV.fetch("POSTGRES_PASSWORD", "") %>

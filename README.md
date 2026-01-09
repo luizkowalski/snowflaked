@@ -1,5 +1,10 @@
 # Snowflaked
 
+[![CI](https://github.com/luizkowalski/snowflaked/actions/workflows/ci.yml/badge.svg)](https://github.com/luizkowalski/snowflaked/actions/workflows/ci.yml)
+[![Gem Version](https://badge.fury.io/rb/snowflaked.svg)](https://badge.fury.io/rb/snowflaked)
+[![Downloads](https://img.shields.io/gem/dt/snowflaked.svg)](https://rubygems.org/gems/snowflaked)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.txt)
+
 A high-performance, thread-safe Snowflake ID generator for Ruby, powered by Rust.
 
 Snowflake IDs are 64-bit unique identifiers that encode a timestamp, machine ID, and sequence number. They're time-sortable (IDs created later are always larger), making them ideal for distributed systems where you need unique IDs without coordination between machines. Unlike UUIDs, Snowflake IDs are smaller, sortable, and index-friendly for databases.
@@ -43,6 +48,11 @@ class CreateUsers < ActiveRecord::Migration[8.1]
   end
 end
 ```
+
+Columns created with `t.snowflake` are automatically detected and will have Snowflake IDs generated for them.
+
+> [!WARNING]
+> SQLite does not support column comments, which Snowflaked uses to auto-detect snowflake columns other than `:id`. When using SQLite, you must explicitly declare snowflake columns using the `snowflake_id` helper in your model.
 
 If you want to generate Snowflake IDs for additional columns, you can do so by using the `snowflake_id` method, without having to migrate the table:
 

@@ -4,18 +4,13 @@ module Snowflaked
   module SchemaDefinitions
     COMMENT = "snowflaked"
 
-    module TableDefinition
-      def snowflake(name, **options)
-        options[:comment] = Snowflaked::SchemaDefinitions::COMMENT
-        column(name, :snowflake, **options)
+    module SnowflakeColumn
+      def snowflake(name, **)
+        column(name, :snowflake, comment: COMMENT, **)
       end
     end
 
-    module Table
-      def snowflake(name, **options)
-        options[:comment] = Snowflaked::SchemaDefinitions::COMMENT
-        column(name, :snowflake, **options)
-      end
-    end
+    TableDefinition = SnowflakeColumn
+    Table           = SnowflakeColumn
   end
 end
