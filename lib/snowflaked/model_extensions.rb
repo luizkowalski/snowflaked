@@ -5,7 +5,7 @@ module Snowflaked
     extend ActiveSupport::Concern
 
     included do
-      class_attribute :_snowflake_attributes, instance_writer: false, default: [:id] # rubocop:disable ThreadSafety/ClassAndModuleAttributes -- false positive
+      class_attribute :_snowflake_attributes, instance_writer: false, default: [:id]
       before_validation :_generate_snowflake_ids, on: :create
     end
 

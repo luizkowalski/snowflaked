@@ -57,7 +57,7 @@ module Snowflaked
 
   class << self
     def configuration
-      @configuration ||= Configuration.new # rubocop:disable ThreadSafety/ClassInstanceVariable -- not changed after initialization
+      @configuration ||= Configuration.new
     end
 
     def configure

@@ -20,7 +20,6 @@ gem "rubocop-md", require: false
 gem "rubocop-minitest", require: false
 gem "rubocop-performance", require: false
 gem "rubocop-rake", require: false
-gem "rubocop-thread_safety", require: false
 
 gem "appraisal", group: %i[development test]
 

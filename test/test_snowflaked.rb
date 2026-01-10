@@ -74,7 +74,7 @@ class TestSnowflaked < ActiveSupport::TestCase
 
   def test_thread_safety
     threads = Array.new(10) do
-      Thread.new { Array.new(100) { Snowflaked.id } } # rubocop:disable ThreadSafety/NewThread -- Intentional
+      Thread.new { Array.new(100) { Snowflaked.id } } # -- Intentional
     end
 
     all_ids = threads.flat_map(&:value)
