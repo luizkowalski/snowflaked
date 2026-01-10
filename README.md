@@ -151,6 +151,10 @@ bundle install
 bundle exec rake
 ```
 
+## Acknowledgments
+
+- [snowflaked-rs](https://github.com/MrGunflame/snowflaked-rs) - the Rust implementation of Snowflake IDs
+
 ## License
 
 MIT
