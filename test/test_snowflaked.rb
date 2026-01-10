@@ -92,4 +92,17 @@ class TestSnowflaked < ActiveSupport::TestCase
 
     assert_in_delta time_ms, reconstructed_ms, 1
   end
+
+  def test_custom_epoch_offsets_correctly
+    expected_epoch = Time.utc(2023, 1, 1)
+
+    assert_equal expected_epoch, Snowflaked.configuration.epoch, "Custom epoch was not loaded from initializer"
+
+    id = Snowflaked.id
+    timestamp = Snowflaked.timestamp(id)
+
+    # ensure the generated timestamp is current (within 5 seconds),
+    # proving that the custom epoch offset was handled correctly by both Generator and Parser.
+    assert_in_delta Time.now, timestamp, 5
+  end
 end

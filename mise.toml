@@ -3,4 +3,12 @@ ruby = "4.0.0"
 rust = { version = "1.92.0", profile = "default" }
 
 [tasks]
-test = ["bundle exec rake", "bundle exec rake clobber"]
+test = [
+  "bundle exec rake clobber",
+  "bundle exec rake",
+]
+
+lint_rust = [
+  "cargo clippy --manifest-path ext/snowflaked/Cargo.toml -- -D warnings",
+  "cargo fmt --manifest-path ext/snowflaked/Cargo.toml --check",
+]
