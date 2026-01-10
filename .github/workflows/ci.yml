@@ -7,6 +7,18 @@ on:
     branches: [main]
 
 jobs:
+  rubocop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0'
+          bundler-cache: true
+
+      - name: Run RuboCop
+        run: bundle exec rubocop -D
+
   test:
     runs-on: ubuntu-latest
     services:
