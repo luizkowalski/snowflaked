@@ -83,7 +83,7 @@ end
 ```ruby
 Snowflaked.configure do |config|
   config.machine_id = 42
-  config.epoch = Time.utc(2020, 1, 1)
+  config.epoch = Time.utc(1989, 1, 3) # When not configured, the epoch is set to the Unix epoch (January 1, 1970)
 end
 ```
 
