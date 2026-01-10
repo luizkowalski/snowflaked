@@ -7,6 +7,34 @@ on:
     branches: [main]
 
 jobs:
+  lint-ruby:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0'
+          bundler-cache: true
+
+      - name: Run RuboCop
+        run: bundle exec rubocop -D
+
+  lint-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oxidize-rb/actions/setup-ruby-and-rust@v1
+        with:
+          ruby-version: '4.0'
+          bundler-cache: true
+          cargo-cache: true
+
+      - name: Clippy
+        run: cargo clippy --manifest-path ext/snowflaked/Cargo.toml -- -D warnings
+
+      - name: Rustfmt
+        run: cargo fmt --manifest-path ext/snowflaked/Cargo.toml --check
+
   test:
     runs-on: ubuntu-latest
     services:
@@ -31,7 +59,11 @@ jobs:
       fail-fast: false
       matrix:
         ruby: ['3.2', '3.3', '3.4', '4.0']
-        rails: ["rails-7.2", "rails-8.0", "rails-8.1"]
+        rails: ["rails-7.2", "rails-8.0", "rails-8.1", "rails-main"]
+        exclude:
+          - rails: rails-main
+            ruby: '3.2'
+
     steps:
       - uses: actions/checkout@v6
       - uses: oxidize-rb/actions/setup-ruby-and-rust@v1
@@ -49,18 +81,3 @@ jobs:
       - name: Run tests with Appraisal
         run: bundle exec appraisal ${{ matrix.rails }} rake test
 
-  lint-rust:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: oxidize-rb/actions/setup-ruby-and-rust@v1
-        with:
-          ruby-version: '4.0'
-          bundler-cache: true
-          cargo-cache: true
-
-      - name: Clippy
-        run: cargo clippy --manifest-path ext/snowflaked/Cargo.toml -- -D warnings
-
-      - name: Rustfmt
-        run: cargo fmt --manifest-path ext/snowflaked/Cargo.toml --check

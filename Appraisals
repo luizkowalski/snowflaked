@@ -20,3 +20,10 @@ end
 appraise "rails-8.1" do
   gem "rails", "~> 8.1"
 end
+
+appraise "rails-main" do
+  gem "rails",         github: "rails/rails", branch: "main"
+  gem "railties",      github: "rails/rails", branch: "main"
+  gem "activerecord",  github: "rails/rails", branch: "main"
+  gem "activesupport", github: "rails/rails", branch: "main"
+end
