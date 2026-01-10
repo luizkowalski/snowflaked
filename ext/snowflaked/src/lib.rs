@@ -1,7 +1,8 @@
 use magnus::{function, prelude::*, Error, RHash, Ruby};
 use snowflaked::sync::Generator;
-use snowflaked::Snowflake;
+use snowflaked::{Builder, Snowflake};
 use std::sync::OnceLock;
+use std::time::UNIX_EPOCH;
 
 struct GeneratorState {
     generator: Generator,
@@ -13,11 +14,18 @@ static STATE: OnceLock<GeneratorState> = OnceLock::new();
 
 fn init_generator(machine_id: u16, epoch_ms: Option<u64>) -> bool {
     let was_empty = STATE.get().is_none();
+    let epoch_offset = epoch_ms.unwrap_or(0);
 
-    STATE.get_or_init(|| GeneratorState {
-        generator: Generator::new(machine_id),
-        epoch_offset: epoch_ms.unwrap_or(0),
-        machine_id,
+    STATE.get_or_init(|| {
+        let epoch = UNIX_EPOCH + std::time::Duration::from_millis(epoch_offset);
+
+        let generator = Builder::new().instance(machine_id).epoch(epoch).build();
+
+        GeneratorState {
+            generator,
+            epoch_offset,
+            machine_id,
+        }
     });
 
     was_empty
