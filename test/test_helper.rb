@@ -1,12 +1,9 @@
 # frozen_string_literal: true
 
-$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+ENV["RAILS_ENV"] = "test"
 
-require_relative "dummy/config/environment"
+require_relative "../test/dummy/config/environment"
+require "rails/test_help"
 
-require "minitest/autorun"
-
-ActiveRecord::MigrationContext.new("test/dummy/db/migrate").migrate
-
-class User < ActiveRecord::Base
-end
+ActiveRecord::Schema.verbose = false
+load "#{Rails.root}/db/schema.rb" # Load the schema for the test database
