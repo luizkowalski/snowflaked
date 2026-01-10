@@ -9,6 +9,6 @@ test = [
 ]
 
 lint_rust = [
-  "cargo clippy --manifest-path ext/snowflaked/Cargo.toml -- -D warnings",
-  "cargo fmt --manifest-path ext/snowflaked/Cargo.toml --check",
+  "cargo clippy --manifest-path ext/snowflaked/Cargo.toml --fix --allow-dirty -- -D warnings",
+  "cargo fmt --manifest-path ext/snowflaked/Cargo.toml",
 ]
