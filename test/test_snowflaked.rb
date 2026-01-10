@@ -105,4 +105,28 @@ class TestSnowflaked < ActiveSupport::TestCase
     # proving that the custom epoch offset was handled correctly by both Generator and Parser.
     assert_in_delta Time.now, timestamp, 5
   end
+
+  def test_fork_safety
+    parent_ids        = Array.new(100) { Snowflaked.id }
+    parent_machine_id = Snowflaked.machine_id(parent_ids.first)
+
+    child_ids, child_machine_id = fork_and_collect { [Array.new(100) { Snowflaked.id }, Snowflaked.configuration.machine_id_value] }
+
+    refute_equal parent_machine_id, child_machine_id, "Child should reinitialize with different machine_id after fork"
+    assert_equal 200, (parent_ids + child_ids).uniq.size, "Generated duplicate IDs across forked processes"
+  end
+
+  private
+
+  def fork_and_collect(&)
+    IO.pipe do |read_io, write_io|
+      pid = fork do
+        read_io.close
+        write_io.puts(JSON.dump(yield))
+        exit!(0)
+      end
+      write_io.close
+      JSON.parse(read_io.read).tap { Process.wait(pid) }
+    end
+  end
 end
