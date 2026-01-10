@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require_relative "test_helper"
+require "test_helper"
 
-class TestRailsIntegration < Minitest::Test
+class TestRailsIntegration < ActiveSupport::TestCase
   def setup
     User.delete_all
   end

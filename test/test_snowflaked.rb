@@ -1,9 +1,8 @@
 # frozen_string_literal: true
 
-require "minitest/autorun"
-require_relative "../lib/snowflaked"
+require_relative "test_helper"
 
-class TestSnowflaked < Minitest::Test
+class TestSnowflaked < ActiveSupport::TestCase
   def test_generates_unique_ids
     ids = Array.new(1000) { Snowflaked.id }
 
