@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.3 (2026-01-11)
+
+- fix: memoize `table_exists?`
+- fix: handle processing fork sharing the same PID
+
+## 0.1.2 (2026-01-10)
+
+- fix: correctly offset the epoch when configured
+- chore: refresh appraisal gemfiles with latest Rails
+
 ## 0.1.1 (2026-01-09)
 
 - Fix loading of precompiled extension for the current Ruby version
