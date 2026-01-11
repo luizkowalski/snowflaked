@@ -17,21 +17,10 @@ fn init_generator(machine_id: u16, epoch_ms: Option<u64>) -> bool {
     let current_pid = std::process::id();
     let epoch_offset = epoch_ms.unwrap_or(0);
 
-    {
-        let state = STATE.read().unwrap();
-        if let Some(ref s) = *state {
-            if s.init_pid == current_pid {
-                return false;
-            }
-        }
-    }
-
     let mut state = STATE.write().unwrap();
 
-    if let Some(ref s) = *state {
-        if s.init_pid == current_pid {
-            return false;
-        }
+    if state.as_ref().is_some_and(|s| s.init_pid == current_pid) {
+        return false;
     }
 
     let epoch = UNIX_EPOCH + std::time::Duration::from_millis(epoch_offset);
@@ -70,7 +59,7 @@ fn generate(ruby: &Ruby) -> Result<u64, Error> {
 fn timestamp_ms(id: u64) -> u64 {
     let timestamp_raw = id.timestamp();
     let state = STATE.read().unwrap();
-    let epoch_offset = state.as_ref().map(|s| s.epoch_offset).unwrap_or(0);
+    let epoch_offset = state.as_ref().map(|generator_state| generator_state.epoch_offset).unwrap_or(0);
     timestamp_raw.saturating_add(epoch_offset)
 }
 
@@ -94,12 +83,18 @@ fn sequence(id: u64) -> u64 {
 
 fn is_initialized() -> bool {
     let state = STATE.read().unwrap();
-    state.as_ref().is_some_and(|s| s.init_pid == std::process::id())
+    state.as_ref().is_some_and(|generator_state| generator_state.init_pid == std::process::id())
 }
 
 fn configured_machine_id() -> Option<u16> {
     let state = STATE.read().unwrap();
-    state.as_ref().and_then(|s| if s.init_pid == std::process::id() { Some(s.machine_id) } else { None })
+    state.as_ref().and_then(|generator_state| {
+        if generator_state.init_pid == std::process::id() {
+            Some(generator_state.machine_id)
+        } else {
+            None
+        }
+    })
 }
 
 #[magnus::init]
