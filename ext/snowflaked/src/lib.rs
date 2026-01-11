@@ -1,50 +1,65 @@
 use magnus::{function, prelude::*, Error, RHash, Ruby};
 use snowflaked::sync::Generator;
 use snowflaked::{Builder, Snowflake};
-use std::sync::OnceLock;
+use std::sync::RwLock;
 use std::time::UNIX_EPOCH;
 
 struct GeneratorState {
     generator: Generator,
     epoch_offset: u64,
     machine_id: u16,
+    init_pid: u32,
 }
 
-static STATE: OnceLock<GeneratorState> = OnceLock::new();
+static STATE: RwLock<Option<GeneratorState>> = RwLock::new(None);
 
 fn init_generator(machine_id: u16, epoch_ms: Option<u64>) -> bool {
-    let was_empty = STATE.get().is_none();
+    let current_pid = std::process::id();
     let epoch_offset = epoch_ms.unwrap_or(0);
 
-    STATE.get_or_init(|| {
-        let epoch = UNIX_EPOCH + std::time::Duration::from_millis(epoch_offset);
+    let mut state = STATE.write().unwrap();
 
-        let generator = Builder::new().instance(machine_id).epoch(epoch).build();
+    if state.as_ref().is_some_and(|s| s.init_pid == current_pid) {
+        return false;
+    }
 
-        GeneratorState {
-            generator,
-            epoch_offset,
-            machine_id,
-        }
+    let epoch = UNIX_EPOCH + std::time::Duration::from_millis(epoch_offset);
+    let generator = Builder::new().instance(machine_id).epoch(epoch).build();
+
+    *state = Some(GeneratorState {
+        generator,
+        epoch_offset,
+        machine_id,
+        init_pid: current_pid,
     });
 
-    was_empty
+    true
 }
 
 fn generate(ruby: &Ruby) -> Result<u64, Error> {
-    let state = STATE.get().ok_or_else(|| {
+    let state = STATE.read().unwrap();
+
+    let s = state.as_ref().ok_or_else(|| {
         Error::new(
             ruby.exception_runtime_error(),
             "Generator not initialized. Call Snowflaked.configure or Snowflaked.id first.",
         )
     })?;
 
-    Ok(state.generator.generate())
+    if s.init_pid != std::process::id() {
+        return Err(Error::new(
+            ruby.exception_runtime_error(),
+            "Fork detected: generator was initialized in a different process. This should not happen if using Snowflaked.id - please report this bug.",
+        ));
+    }
+
+    Ok(s.generator.generate())
 }
 
 fn timestamp_ms(id: u64) -> u64 {
     let timestamp_raw = id.timestamp();
-    let epoch_offset = STATE.get().map(|s| s.epoch_offset).unwrap_or(0);
+    let state = STATE.read().unwrap();
+    let epoch_offset = state.as_ref().map(|s| s.epoch_offset).unwrap_or(0);
     timestamp_raw.saturating_add(epoch_offset)
 }
 
@@ -67,11 +82,13 @@ fn sequence(id: u64) -> u64 {
 }
 
 fn is_initialized() -> bool {
-    STATE.get().is_some()
+    let state = STATE.read().unwrap();
+    state.as_ref().is_some_and(|s| s.init_pid == std::process::id())
 }
 
 fn configured_machine_id() -> Option<u16> {
-    STATE.get().map(|s| s.machine_id)
+    let state = STATE.read().unwrap();
+    state.as_ref().and_then(|s| if s.init_pid == std::process::id() { Some(s.machine_id) } else { None })
 }
 
 #[magnus::init]

@@ -87,6 +87,13 @@ Snowflaked.configure do |config|
 end
 ```
 
+### Machine ID
+
+> [!TIP]
+> For multi-process servers like Puma, it is recommended to **not** configure `machine_id` explicitly. The gem automatically calculates a unique machine ID using `(hostname.hash ^ pid) % 1024`, which ensures each forked worker process gets a different ID and avoids duplicate Snowflake IDs.
+
+If you must set `machine_id` explicitly, use environment variables that differ per worker process.
+
 ### Machine ID Resolution
 
 If `machine_id` is not explicitly configured, it resolves in this order:
