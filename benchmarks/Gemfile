@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 source "https://rubygems.org"
 
-gem "rails", "~> 8.0"
-gem "pg"
-gem "snowflaked", path: ".."
 gem "benchmark-ips"
+gem "pg"
+gem "rails", "~> 8.0"
+gem "snowflaked", path: ".."
