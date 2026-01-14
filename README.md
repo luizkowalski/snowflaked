@@ -143,6 +143,12 @@ Snowflaked.machine_id(id)
 # => 42
 ```
 
+## Benchmarks
+
+See [BENCHMARKS.md](BENCHMARKS.md) for more details.
+
+tl;dr: Snowflake IDs are virtually the same speed as database-backed IDs.
+
 ## Requirements
 
 - Ruby >= 3.2

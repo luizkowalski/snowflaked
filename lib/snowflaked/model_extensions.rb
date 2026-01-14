@@ -6,7 +6,7 @@ module Snowflaked
 
     included do
       class_attribute :_snowflake_attributes, instance_writer: false, default: [:id]
-      before_validation :_generate_snowflake_ids, on: :create
+      after_initialize :_generate_snowflake_ids, if: :new_record?
     end
 
     class_methods do
@@ -14,6 +14,7 @@ module Snowflaked
         attrs = attributes.map(&:to_sym)
         attrs |= [:id] if id
         self._snowflake_attributes = attrs
+        @_snowflake_attributes_with_columns = nil
       end
 
       def _snowflake_columns_from_comments
@@ -25,12 +26,17 @@ module Snowflaked
           []
         end
       end
+
+      def _snowflake_attributes_with_columns
+        @_snowflake_attributes_with_columns ||= (_snowflake_attributes | _snowflake_columns_from_comments)
+      end
     end
 
     private
 
     def _generate_snowflake_ids
-      attributes_to_generate = self.class._snowflake_attributes | self.class._snowflake_columns_from_comments
+      attributes_to_generate = self.class._snowflake_attributes_with_columns
+      return if attributes_to_generate.empty?
 
       attributes_to_generate.each do |attribute|
         next if self[attribute].present?
