@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.4 (2026-01-14)
+
+- feat: optimize ID generation performance
+- chore: added benchmarks
+
 ## 0.1.3 (2026-01-11)
 
 - fix: memoize `table_exists?`

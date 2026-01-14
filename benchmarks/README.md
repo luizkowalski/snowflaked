@@ -37,7 +37,7 @@ The benchmarks compare two approaches to record creation:
 ```log
 Ruby version: 4.0.1
 Rails version: 8.1.2
-Snowflaked version: 0.1.3
+Snowflaked version: 0.1.4
 YJIT: enabled
 
 ruby 4.0.1 (2026-01-13 revision e04267a14b) +YJIT +PRISM [arm64-darwin25]
