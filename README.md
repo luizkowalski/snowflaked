@@ -145,7 +145,7 @@ Snowflaked.machine_id(id)
 
 ## Benchmarks
 
-See [BENCHMARKS.md](benchmarks/BENCHMARKS.md) for more details.
+See [BENCHMARKS.md](benchmarks/README.md) for more details.
 
 tl;dr: Snowflake IDs have a negligible performance impact compared to database-backed IDs.
 

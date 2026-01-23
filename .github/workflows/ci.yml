@@ -7,27 +7,18 @@ on:
     branches: [main]
 
 jobs:
-  lint-ruby:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '4.0'
-          bundler-cache: true
-
-      - name: Run RuboCop
-        run: bundle exec rubocop -D
-
-  lint-rust:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: oxidize-rb/actions/setup-ruby-and-rust@v1
         with:
-          ruby-version: '4.0'
+          ruby-version: '4.0.1'
           bundler-cache: true
           cargo-cache: true
+
+      - name: RuboCop
+        run: bundle exec rubocop -D
 
       - name: Clippy
         run: cargo clippy --manifest-path ext/snowflaked/Cargo.toml -- -D warnings
