@@ -63,6 +63,9 @@ jobs:
           bundler-cache: true
           cargo-cache: true
 
+      - name: Fix gem directory permissions
+        run: sudo chmod +t $(ruby -e 'puts Gem.default_dir')/gems
+
       - name: Install Appraisal
         run: bundle exec appraisal install
 
