@@ -29,8 +29,7 @@ module Snowflaked
     end
 
     def machine_id_value
-      id = @machine_id || default_machine_id
-      id % (MAX_MACHINE_ID + 1)
+      (@machine_id || default_machine_id) % (MAX_MACHINE_ID + 1)
     end
 
     def epoch_ms
@@ -46,8 +45,7 @@ module Snowflaked
     end
 
     def env_machine_id
-      id = ENV["SNOWFLAKED_MACHINE_ID"] || ENV.fetch("MACHINE_ID", nil)
-      id&.to_i
+      (ENV["SNOWFLAKED_MACHINE_ID"] || ENV.fetch("MACHINE_ID", nil))&.to_i
     end
 
     def hostname_pid_hash
@@ -79,8 +77,8 @@ module Snowflaked
 
     def timestamp(id)
       ensure_initialized!
-      time_ms = Native.timestamp_ms(id)
-      Time.at(time_ms / 1000, (time_ms % 1000) * 1000, :usec)
+      seconds, milliseconds = Native.timestamp_ms(id).divmod(1000)
+      Time.at(seconds, milliseconds * 1000, :usec)
     end
 
     def machine_id(id)
@@ -101,8 +99,7 @@ module Snowflaked
     def ensure_initialized!
       return if Native.initialized?
 
-      config = configuration
-      Native.init_generator(config.machine_id_value, config.epoch_ms)
+      Native.init_generator(configuration.machine_id_value, configuration.epoch_ms)
     end
   end
 end

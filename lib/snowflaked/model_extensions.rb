@@ -20,11 +20,7 @@ module Snowflaked
       def _snowflake_columns_from_comments
         return @_snowflake_columns_from_comments if defined?(@_snowflake_columns_from_comments)
 
-        @_snowflake_columns_from_comments = if table_exists?
-          columns.filter_map { |col| col.name.to_sym if col.comment == Snowflaked::SchemaDefinitions::COMMENT }
-        else
-          []
-        end
+        @_snowflake_columns_from_comments = table_exists? ? columns.filter_map { |col| col.name.to_sym if col.comment == Snowflaked::SchemaDefinitions::COMMENT } : []
       end
 
       def _snowflake_attributes_with_columns
@@ -35,10 +31,10 @@ module Snowflaked
     private
 
     def _generate_snowflake_ids
-      attributes_to_generate = self.class._snowflake_attributes_with_columns
-      return if attributes_to_generate.empty?
+      attributes = self.class._snowflake_attributes_with_columns
+      return if attributes.empty?
 
-      attributes_to_generate.each do |attribute|
+      attributes.each do |attribute|
         next if self[attribute].present?
 
         self[attribute] = Snowflaked.id
