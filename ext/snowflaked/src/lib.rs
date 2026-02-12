@@ -36,24 +36,39 @@ fn init_generator(machine_id: u16, epoch_ms: Option<u64>) -> bool {
     true
 }
 
-fn generate(ruby: &Ruby) -> Result<u64, Error> {
-    let state = STATE.read().unwrap();
+fn generate(machine_id: u16, epoch_ms: Option<u64>) -> u64 {
+    let current_pid = std::process::id();
 
-    let s = state.as_ref().ok_or_else(|| {
-        Error::new(
-            ruby.exception_runtime_error(),
-            "Generator not initialized. Call Snowflaked.configure or Snowflaked.id first.",
-        )
-    })?;
-
-    if s.init_pid != std::process::id() {
-        return Err(Error::new(
-            ruby.exception_runtime_error(),
-            "Fork detected: generator was initialized in a different process. This should not happen if using Snowflaked.id - please report this bug.",
-        ));
+    {
+        let state = STATE.read().unwrap();
+        if let Some(s) = state.as_ref() {
+            if s.init_pid == current_pid {
+                return s.generator.generate();
+            }
+        }
     }
 
-    Ok(s.generator.generate())
+    let epoch_offset = epoch_ms.unwrap_or(0);
+    let epoch = UNIX_EPOCH + std::time::Duration::from_millis(epoch_offset);
+
+    let mut state = STATE.write().unwrap();
+
+    if let Some(s) = state.as_ref() {
+        if s.init_pid == current_pid {
+            return s.generator.generate();
+        }
+    }
+
+    let generator = Builder::new().instance(machine_id).epoch(epoch).build();
+
+    *state = Some(GeneratorState {
+        generator,
+        epoch_offset,
+        machine_id,
+        init_pid: current_pid,
+    });
+
+    state.as_ref().unwrap().generator.generate()
 }
 
 fn timestamp_ms(id: u64) -> u64 {
@@ -97,7 +112,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     let internal = module.define_module("Native")?;
 
     internal.define_singleton_method("init_generator", function!(init_generator, 2))?;
-    internal.define_singleton_method("generate", function!(generate, 0))?;
+    internal.define_singleton_method("generate", function!(generate, 2))?;
     internal.define_singleton_method("parse", function!(parse, 1))?;
     internal.define_singleton_method("timestamp_ms", function!(timestamp_ms, 1))?;
     internal.define_singleton_method("machine_id", function!(machine_id_from_id, 1))?;

@@ -68,8 +68,8 @@ module Snowflaked
     end
 
     def id
-      ensure_initialized!
-      Native.generate
+      config = configuration
+      Native.generate(config.machine_id_value, config.epoch_ms)
     end
 
     def parse(id)
@@ -78,6 +78,7 @@ module Snowflaked
     end
 
     def timestamp(id)
+      ensure_initialized!
       time_ms = Native.timestamp_ms(id)
       Time.at(time_ms / 1000, (time_ms % 1000) * 1000, :usec)
     end
@@ -88,6 +89,7 @@ module Snowflaked
     end
 
     def timestamp_ms(id)
+      ensure_initialized!
       Native.timestamp_ms(id)
     end
 
