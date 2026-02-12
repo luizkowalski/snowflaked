@@ -84,7 +84,6 @@ module Snowflaked
     end
 
     def machine_id(id)
-      ensure_initialized!
       Native.machine_id(id)
     end
 
