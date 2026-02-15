@@ -39,10 +39,7 @@ fn init_state(state: &mut Option<Arc<GeneratorState>>, machine_id: u16, epoch_of
 
 fn state_for_pid(pid: u32) -> Option<Arc<GeneratorState>> {
     let guard = STATE.read().unwrap_or_else(|e| e.into_inner());
-    guard
-        .as_ref()
-        .filter(|state| state.init_pid == pid)
-        .map(Arc::clone)
+    guard.as_ref().filter(|state| state.init_pid == pid).map(Arc::clone)
 }
 
 fn init_generator(machine_id: u16, epoch_ms: Option<u64>) -> bool {
