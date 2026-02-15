@@ -1,7 +1,7 @@
 use magnus::{function, prelude::*, Error, RHash, Ruby};
 use snowflaked::sync::Generator;
 use snowflaked::{Builder, Snowflake};
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use std::time::UNIX_EPOCH;
 
 struct GeneratorState {
@@ -11,14 +11,14 @@ struct GeneratorState {
     init_pid: u32,
 }
 
-static STATE: RwLock<Option<GeneratorState>> = RwLock::new(None);
+static STATE: RwLock<Option<Arc<GeneratorState>>> = RwLock::new(None);
 
 fn read_state<T>(f: impl FnOnce(Option<&GeneratorState>) -> T) -> T {
     let guard = STATE.read().unwrap_or_else(|e| e.into_inner());
-    f(guard.as_ref())
+    f(guard.as_ref().map(Arc::as_ref))
 }
 
-fn write_state<T>(f: impl FnOnce(&mut Option<GeneratorState>) -> T) -> T {
+fn write_state<T>(f: impl FnOnce(&mut Option<Arc<GeneratorState>>) -> T) -> T {
     let mut guard = STATE.write().unwrap_or_else(|e| e.into_inner());
     f(&mut guard)
 }
@@ -28,13 +28,21 @@ fn build_generator(machine_id: u16, epoch_offset: u64) -> Generator {
     Builder::new().instance(machine_id).epoch(epoch).build()
 }
 
-fn init_state(state: &mut Option<GeneratorState>, machine_id: u16, epoch_offset: u64, pid: u32) {
-    *state = Some(GeneratorState {
+fn init_state(state: &mut Option<Arc<GeneratorState>>, machine_id: u16, epoch_offset: u64, pid: u32) {
+    *state = Some(Arc::new(GeneratorState {
         generator: build_generator(machine_id, epoch_offset),
         epoch_offset,
         machine_id,
         init_pid: pid,
-    });
+    }));
+}
+
+fn state_for_pid(pid: u32) -> Option<Arc<GeneratorState>> {
+    let guard = STATE.read().unwrap_or_else(|e| e.into_inner());
+    guard
+        .as_ref()
+        .filter(|state| state.init_pid == pid)
+        .map(Arc::clone)
 }
 
 fn init_generator(machine_id: u16, epoch_ms: Option<u64>) -> bool {
@@ -66,23 +74,24 @@ fn generate(ruby: &Ruby, machine_id: u16, epoch_ms: Option<u64>) -> Result<u64, 
     let current_pid = std::process::id();
     let epoch_offset = epoch_ms.unwrap_or(0);
 
-    {
-        let guard = STATE.read().unwrap_or_else(|e| e.into_inner());
-        if let Some(s) = guard.as_ref().filter(|s| s.init_pid == current_pid) {
-            validate_config(ruby, s, machine_id, epoch_offset)?;
-            return Ok(s.generator.generate());
+    if let Some(state) = state_for_pid(current_pid) {
+        validate_config(ruby, &state, machine_id, epoch_offset)?;
+        return Ok(state.generator.generate());
+    }
+
+    let state = {
+        let mut guard = STATE.write().unwrap_or_else(|e| e.into_inner());
+
+        if let Some(state) = guard.as_ref().filter(|state| state.init_pid == current_pid) {
+            validate_config(ruby, state, machine_id, epoch_offset)?;
+            Arc::clone(state)
+        } else {
+            init_state(&mut guard, machine_id, epoch_offset, current_pid);
+            Arc::clone(guard.as_ref().unwrap())
         }
-    }
+    };
 
-    let mut guard = STATE.write().unwrap_or_else(|e| e.into_inner());
-
-    if let Some(s) = guard.as_ref().filter(|s| s.init_pid == current_pid) {
-        validate_config(ruby, s, machine_id, epoch_offset)?;
-        return Ok(s.generator.generate());
-    }
-
-    init_state(&mut guard, machine_id, epoch_offset, current_pid);
-    Ok(guard.as_ref().unwrap().generator.generate())
+    Ok(state.generator.generate())
 }
 
 fn epoch_offset() -> u64 {
