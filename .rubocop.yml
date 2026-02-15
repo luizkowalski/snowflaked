@@ -37,6 +37,10 @@ Style/PercentLiteralDelimiters:
     "%w": "[]"
     "%W": "[]"
 
+# Metrics
+Metrics/ClassLength:
+  Enabled: false
+
 # Layout
 Layout/FirstHashElementIndentation:
   Enabled: true

@@ -4,8 +4,6 @@ use snowflaked::{Builder, Snowflake};
 use std::sync::RwLock;
 use std::time::UNIX_EPOCH;
 
-const GENERATOR_CONFIG_MISMATCH: &str = "Generator already initialized with a different machine_id or epoch for this process";
-
 struct GeneratorState {
     generator: Generator,
     epoch_offset: u64,
@@ -15,39 +13,53 @@ struct GeneratorState {
 
 static STATE: RwLock<Option<GeneratorState>> = RwLock::new(None);
 
+fn read_state<T>(f: impl FnOnce(Option<&GeneratorState>) -> T) -> T {
+    let guard = STATE.read().unwrap_or_else(|e| e.into_inner());
+    f(guard.as_ref())
+}
+
+fn write_state<T>(f: impl FnOnce(&mut Option<GeneratorState>) -> T) -> T {
+    let mut guard = STATE.write().unwrap_or_else(|e| e.into_inner());
+    f(&mut guard)
+}
+
 fn build_generator(machine_id: u16, epoch_offset: u64) -> Generator {
     let epoch = UNIX_EPOCH + std::time::Duration::from_millis(epoch_offset);
     Builder::new().instance(machine_id).epoch(epoch).build()
 }
 
-fn validate_generator_config(ruby: &Ruby, state: &GeneratorState, machine_id: u16, epoch_offset: u64) -> Result<u64, Error> {
-    if state.machine_id != machine_id || state.epoch_offset != epoch_offset {
-        return Err(Error::new(ruby.exception_runtime_error(), GENERATOR_CONFIG_MISMATCH));
-    }
-
-    Ok(state.generator.generate())
+fn init_state(state: &mut Option<GeneratorState>, machine_id: u16, epoch_offset: u64, pid: u32) {
+    *state = Some(GeneratorState {
+        generator: build_generator(machine_id, epoch_offset),
+        epoch_offset,
+        machine_id,
+        init_pid: pid,
+    });
 }
 
 fn init_generator(machine_id: u16, epoch_ms: Option<u64>) -> bool {
     let current_pid = std::process::id();
     let epoch_offset = epoch_ms.unwrap_or(0);
 
-    let mut state = STATE.write().unwrap();
+    write_state(|state| {
+        if state.as_ref().is_some_and(|s| s.init_pid == current_pid) {
+            return false;
+        }
 
-    if state.as_ref().is_some_and(|s| s.init_pid == current_pid) {
-        return false;
+        init_state(state, machine_id, epoch_offset, current_pid);
+        true
+    })
+}
+
+fn validate_config(ruby: &Ruby, s: &GeneratorState, machine_id: u16, epoch_offset: u64) -> Result<(), Error> {
+    if s.machine_id != machine_id || s.epoch_offset != epoch_offset {
+        return Err(Error::new(
+            ruby.exception_runtime_error(),
+            "Generator already initialized with a different machine_id or epoch for this process",
+        ));
     }
 
-    let generator = build_generator(machine_id, epoch_offset);
-
-    *state = Some(GeneratorState {
-        generator,
-        epoch_offset,
-        machine_id,
-        init_pid: current_pid,
-    });
-
-    true
+    Ok(())
 }
 
 fn generate(ruby: &Ruby, machine_id: u16, epoch_ms: Option<u64>) -> Result<u64, Error> {
@@ -55,48 +67,39 @@ fn generate(ruby: &Ruby, machine_id: u16, epoch_ms: Option<u64>) -> Result<u64, 
     let epoch_offset = epoch_ms.unwrap_or(0);
 
     {
-        let state = STATE.read().unwrap();
-        if let Some(s) = state.as_ref() {
-            if s.init_pid == current_pid {
-                return validate_generator_config(ruby, s, machine_id, epoch_offset);
-            }
+        let guard = STATE.read().unwrap_or_else(|e| e.into_inner());
+        if let Some(s) = guard.as_ref().filter(|s| s.init_pid == current_pid) {
+            validate_config(ruby, s, machine_id, epoch_offset)?;
+            return Ok(s.generator.generate());
         }
     }
 
-    let mut state = STATE.write().unwrap();
+    let mut guard = STATE.write().unwrap_or_else(|e| e.into_inner());
 
-    if let Some(s) = state.as_ref() {
-        if s.init_pid == current_pid {
-            return validate_generator_config(ruby, s, machine_id, epoch_offset);
-        }
+    if let Some(s) = guard.as_ref().filter(|s| s.init_pid == current_pid) {
+        validate_config(ruby, s, machine_id, epoch_offset)?;
+        return Ok(s.generator.generate());
     }
 
-    let generator = build_generator(machine_id, epoch_offset);
-    let id = generator.generate();
+    init_state(&mut guard, machine_id, epoch_offset, current_pid);
+    Ok(guard.as_ref().unwrap().generator.generate())
+}
 
-    *state = Some(GeneratorState {
-        generator,
-        epoch_offset,
-        machine_id,
-        init_pid: current_pid,
-    });
-
-    Ok(id)
+fn epoch_offset() -> u64 {
+    read_state(|s| s.map(|s| s.epoch_offset).unwrap_or(0))
 }
 
 fn timestamp_ms(id: u64) -> u64 {
-    let timestamp_raw = id.timestamp();
-    let state = STATE.read().unwrap();
-    let epoch_offset = state.as_ref().map(|s| s.epoch_offset).unwrap_or(0);
-    timestamp_raw.saturating_add(epoch_offset)
+    id.timestamp().saturating_add(epoch_offset())
 }
 
 fn parse(ruby: &Ruby, id: u64) -> Result<RHash, Error> {
     let hash = ruby.hash_new();
+    let offset = epoch_offset();
 
-    hash.aset(ruby.to_symbol("timestamp_ms"), timestamp_ms(id))?;
-    hash.aset(ruby.to_symbol("machine_id"), machine_id_from_id(id))?;
-    hash.aset(ruby.to_symbol("sequence"), sequence(id))?;
+    hash.aset(ruby.to_symbol("timestamp_ms"), id.timestamp().saturating_add(offset))?;
+    hash.aset(ruby.to_symbol("machine_id"), id.instance())?;
+    hash.aset(ruby.to_symbol("sequence"), id.sequence())?;
 
     Ok(hash)
 }
@@ -110,13 +113,11 @@ fn sequence(id: u64) -> u64 {
 }
 
 fn is_initialized() -> bool {
-    let state = STATE.read().unwrap();
-    state.as_ref().is_some_and(|s| s.init_pid == std::process::id())
+    read_state(|s| s.is_some_and(|s| s.init_pid == std::process::id()))
 }
 
 fn configured_machine_id() -> Option<u16> {
-    let state = STATE.read().unwrap();
-    state.as_ref().and_then(|s| (s.init_pid == std::process::id()).then_some(s.machine_id))
+    read_state(|s| s.and_then(|s| (s.init_pid == std::process::id()).then_some(s.machine_id)))
 }
 
 #[magnus::init]

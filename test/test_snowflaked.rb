@@ -101,9 +101,31 @@ class TestSnowflaked < ActiveSupport::TestCase
     id = Snowflaked.id
     timestamp = Snowflaked.timestamp(id)
 
-    # ensure the generated timestamp is current (within 5 seconds),
-    # proving that the custom epoch offset was handled correctly by both Generator and Parser.
     assert_in_delta Time.now, timestamp, 5
+  end
+
+  def test_thread_safety_under_contention
+    threads = Array.new(50) do
+      Thread.new { Array.new(200) { Snowflaked.id } }
+    end
+
+    all_ids = threads.flat_map(&:value)
+
+    assert_equal 10_000, all_ids.size
+    assert_equal 10_000, all_ids.uniq.size, "Generated duplicate IDs under heavy thread contention"
+  end
+
+  def test_parse_components_are_consistent
+    ids = Array.new(100) { Snowflaked.id }
+    machine_id = Snowflaked.configuration.machine_id_value
+
+    ids.each do |id|
+      parsed = Snowflaked.parse(id)
+
+      assert_equal Snowflaked.timestamp_ms(id), parsed[:timestamp_ms]
+      assert_equal machine_id, parsed[:machine_id]
+      assert_equal Snowflaked.sequence(id), parsed[:sequence]
+    end
   end
 
   def test_fork_safety
