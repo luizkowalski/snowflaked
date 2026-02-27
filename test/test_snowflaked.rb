@@ -138,7 +138,7 @@ class TestSnowflaked < ActiveSupport::TestCase
     assert_equal 200, (parent_ids + child_ids).uniq.size, "Generated duplicate IDs across forked processes"
   end
 
-  def test_fork_safety_with_background_thread
+  def test_fork_safety_with_background_thread # rubocop:disable Metrics/MethodLength
     stop = false
     bg_thread = Thread.new do
       Snowflaked.id until stop
