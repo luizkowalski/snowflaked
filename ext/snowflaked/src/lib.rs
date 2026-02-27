@@ -19,9 +19,12 @@ fn build_generator(machine_id: u16, epoch_offset: u64) -> Generator {
     Builder::new().instance(machine_id).epoch(epoch).build()
 }
 
-fn init_generator(machine_id: u16, epoch_ms: Option<u64>) -> bool {
-    let current_pid = std::process::id();
-    let epoch_offset = epoch_ms.unwrap_or(0);
+fn ensure_state(machine_id: u16, epoch_offset: u64, current_pid: u32) -> (Arc<GeneratorState>, bool) {
+    if let Some(s) = &*STATE.load() {
+        if s.init_pid == current_pid {
+            return (Arc::clone(s), false);
+        }
+    }
 
     let new_state = Arc::new(GeneratorState {
         generator: build_generator(machine_id, epoch_offset),
@@ -39,7 +42,13 @@ fn init_generator(machine_id: u16, epoch_ms: Option<u64>) -> bool {
         Arc::clone(&new_state)
     });
 
-    prev_state.is_none_or(|s| s.init_pid != current_pid)
+    let swapped = prev_state.is_none_or(|s| s.init_pid != current_pid);
+    (Arc::clone(STATE.load().as_ref().unwrap()), swapped)
+}
+
+fn init_generator(machine_id: u16, epoch_ms: Option<u64>) -> bool {
+    let (_, swapped) = ensure_state(machine_id, epoch_ms.unwrap_or(0), std::process::id());
+    swapped
 }
 
 fn validate_config(ruby: &Ruby, s: &GeneratorState, machine_id: u16, epoch_offset: u64) -> Result<(), Error> {
@@ -49,57 +58,28 @@ fn validate_config(ruby: &Ruby, s: &GeneratorState, machine_id: u16, epoch_offse
             "Generator already initialized with a different machine_id or epoch for this process",
         ));
     }
-
     Ok(())
 }
 
 fn generate(ruby: &Ruby, machine_id: u16, epoch_ms: Option<u64>) -> Result<u64, Error> {
-    let current_pid = std::process::id();
     let epoch_offset = epoch_ms.unwrap_or(0);
+    let (state, _) = ensure_state(machine_id, epoch_offset, std::process::id());
 
-    let state = STATE.load();
-    if let Some(s) = &*state {
-        if s.init_pid == current_pid {
-            validate_config(ruby, s, machine_id, epoch_offset)?;
-            return Ok(s.generator.generate());
-        }
-    }
-
-    let new_state = Arc::new(GeneratorState {
-        generator: build_generator(machine_id, epoch_offset),
-        epoch_offset,
-        machine_id,
-        init_pid: current_pid,
-    });
-
-    STATE.rcu(|current| {
-        if let Some(c) = current {
-            if c.init_pid == current_pid {
-                return Arc::clone(c);
-            }
-        }
-        Arc::clone(&new_state)
-    });
-
-    let final_state = STATE.load();
-
-    let s = final_state.as_ref().unwrap();
-    validate_config(ruby, s, machine_id, epoch_offset)?;
-    Ok(s.generator.generate())
+    validate_config(ruby, &state, machine_id, epoch_offset)?;
+    Ok(state.generator.generate())
 }
 
 fn epoch_offset(ruby: &Ruby) -> Result<u64, Error> {
-    let state = STATE.load();
-    if let Some(s) = &*state {
-        return Ok(s.epoch_offset);
-    }
-
-    Err(Error::new(ruby.exception_runtime_error(), "Generator not initialized"))
+    STATE
+        .load()
+        .as_ref()
+        .map(|s| s.epoch_offset)
+        .ok_or_else(|| Error::new(ruby.exception_runtime_error(), "Generator not initialized"))
 }
 
 fn parse(ruby: &Ruby, id: u64) -> Result<RHash, Error> {
-    let hash = ruby.hash_new();
     let offset = epoch_offset(ruby)?;
+    let hash = ruby.hash_new();
 
     hash.aset(ruby.to_symbol("timestamp_ms"), id.timestamp().saturating_add(offset))?;
     hash.aset(ruby.to_symbol("machine_id"), id.instance())?;
@@ -109,8 +89,7 @@ fn parse(ruby: &Ruby, id: u64) -> Result<RHash, Error> {
 }
 
 fn timestamp_ms(ruby: &Ruby, id: u64) -> Result<u64, Error> {
-    let offset = epoch_offset(ruby)?;
-    Ok(id.timestamp().saturating_add(offset))
+    epoch_offset(ruby).map(|offset| id.timestamp().saturating_add(offset))
 }
 
 fn machine_id_from_id(id: u64) -> u64 {
@@ -122,13 +101,11 @@ fn sequence(id: u64) -> u64 {
 }
 
 fn is_initialized() -> bool {
-    let state = STATE.load();
-    state.as_ref().is_some_and(|s| s.init_pid == std::process::id())
+    STATE.load().as_ref().is_some_and(|s| s.init_pid == std::process::id())
 }
 
 fn configured_machine_id() -> Option<u16> {
-    let state = STATE.load();
-    state.as_ref().and_then(|s| (s.init_pid == std::process::id()).then_some(s.machine_id))
+    STATE.load().as_ref().filter(|s| s.init_pid == std::process::id()).map(|s| s.machine_id)
 }
 
 #[magnus::init]
