@@ -148,20 +148,22 @@ class TestSnowflaked < ActiveSupport::TestCase
       Snowflaked.id until stop
     end
 
-    # Wait until the background thread has successfully generated at least one ID
-    started.pop
+    begin
+      # Wait until the background thread has successfully generated at least one ID
+      started.pop
 
-    child_ids, = fork_and_collect do
-      require "timeout"
-      Timeout.timeout(5) do
-        [Array.new(100) { Snowflaked.id }, Snowflaked.configuration.machine_id_value]
+      child_ids, = fork_and_collect do
+        require "timeout"
+        Timeout.timeout(5) do
+          [Array.new(100) { Snowflaked.id }, Snowflaked.configuration.machine_id_value]
+        end
       end
+
+      assert_equal 100, child_ids.uniq.size
+    ensure
+      stop = true
+      bg_thread.join
     end
-
-    stop = true
-    bg_thread.join
-
-    assert_equal 100, child_ids.uniq.size
   end
 
   private
