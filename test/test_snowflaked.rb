@@ -138,14 +138,18 @@ class TestSnowflaked < ActiveSupport::TestCase
     assert_equal 200, (parent_ids + child_ids).uniq.size, "Generated duplicate IDs across forked processes"
   end
 
-  def test_fork_safety_with_background_thread # rubocop:disable Metrics/MethodLength
+  def test_fork_safety_with_background_thread # rubocop:disable Metrics/MethodLength,Metrics/AbcSize
     stop = false
+    started = Queue.new
+
     bg_thread = Thread.new do
+      Snowflaked.id
+      started << true
       Snowflaked.id until stop
     end
 
-    # Wait a tiny bit for the thread to spin up and keep the lock busy
-    sleep(0.01)
+    # Wait until the background thread has successfully generated at least one ID
+    started.pop
 
     child_ids, = fork_and_collect do
       require "timeout"

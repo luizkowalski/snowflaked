@@ -30,19 +30,16 @@ fn init_generator(machine_id: u16, epoch_ms: Option<u64>) -> bool {
         init_pid: current_pid,
     });
 
-    let mut swapped = false;
-    STATE.rcu(|current| {
+    let prev_state = STATE.rcu(|current| {
         if let Some(c) = current {
             if c.init_pid == current_pid {
-                swapped = false;
                 return Arc::clone(c);
             }
         }
-        swapped = true;
         Arc::clone(&new_state)
     });
 
-    swapped
+    prev_state.is_none_or(|s| s.init_pid != current_pid)
 }
 
 fn validate_config(ruby: &Ruby, s: &GeneratorState, machine_id: u16, epoch_offset: u64) -> Result<(), Error> {
@@ -85,9 +82,6 @@ fn generate(ruby: &Ruby, machine_id: u16, epoch_ms: Option<u64>) -> Result<u64, 
     });
 
     let final_state = STATE.load();
-    if final_state.is_none() {
-        return Err(Error::new(ruby.exception_runtime_error(), "final_state is none! This should be impossible!"));
-    }
 
     let s = final_state.as_ref().unwrap();
     validate_config(ruby, s, machine_id, epoch_offset)?;
@@ -96,12 +90,6 @@ fn generate(ruby: &Ruby, machine_id: u16, epoch_ms: Option<u64>) -> Result<u64, 
 
 fn epoch_offset(ruby: &Ruby) -> Result<u64, Error> {
     let state = STATE.load();
-    if let Some(s) = &*state {
-        if s.init_pid == std::process::id() {
-            return Ok(s.epoch_offset);
-        }
-    }
-
     if let Some(s) = &*state {
         return Ok(s.epoch_offset);
     }

@@ -8,7 +8,8 @@ test = [
   "bundle exec rake",
 ]
 
-lint_rust = [
+lint = [
+  "bundle exec rubocop -A",
   "cargo clippy --manifest-path ext/snowflaked/Cargo.toml --fix --allow-dirty -- -D warnings",
   "cargo fmt --manifest-path ext/snowflaked/Cargo.toml",
 ]
