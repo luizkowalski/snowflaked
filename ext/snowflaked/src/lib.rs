@@ -42,8 +42,10 @@ fn ensure_state(machine_id: u16, epoch_offset: u64, current_pid: u32) -> (Arc<Ge
         Arc::clone(&new_state)
     });
 
-    let swapped = prev_state.is_none_or(|s| s.init_pid != current_pid);
-    (Arc::clone(STATE.load().as_ref().unwrap()), swapped)
+    match prev_state.as_ref() {
+        Some(s) if s.init_pid == current_pid => (Arc::clone(s), false),
+        _ => (new_state, true),
+    }
 }
 
 fn init_generator(machine_id: u16, epoch_ms: Option<u64>) -> bool {
