@@ -138,6 +138,28 @@ class TestSnowflaked < ActiveSupport::TestCase
     assert_equal 200, (parent_ids + child_ids).uniq.size, "Generated duplicate IDs across forked processes"
   end
 
+  def test_fork_safety_with_background_thread
+    stop = false
+    bg_thread = Thread.new do
+      Snowflaked.id until stop
+    end
+
+    # Wait a tiny bit for the thread to spin up and keep the lock busy
+    sleep(0.01)
+
+    child_ids, = fork_and_collect do
+      require "timeout"
+      Timeout.timeout(5) do
+        [Array.new(100) { Snowflaked.id }, Snowflaked.configuration.machine_id_value]
+      end
+    end
+
+    stop = true
+    bg_thread.join
+
+    assert_equal 100, child_ids.uniq.size
+  end
+
   private
 
   def fork_and_collect(&)

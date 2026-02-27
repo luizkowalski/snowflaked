@@ -11,6 +11,7 @@ rescue LoadError
 end
 
 require "socket"
+require "securerandom"
 
 require_relative "snowflaked/railtie" if defined?(Rails::Railtie)
 
@@ -41,7 +42,10 @@ module Snowflaked
     private
 
     def default_machine_id
-      env_machine_id || hostname_pid_hash
+      return @default_machine_id if defined?(@default_machine_id) && @default_machine_pid == Process.pid
+
+      @default_machine_pid = Process.pid
+      @default_machine_id = env_machine_id || hostname_pid_hash
     end
 
     def env_machine_id
@@ -49,7 +53,7 @@ module Snowflaked
     end
 
     def hostname_pid_hash
-      (Socket.gethostname.hash ^ Process.pid) % (MAX_MACHINE_ID + 1)
+      (Socket.gethostname.hash ^ Process.pid ^ SecureRandom.random_number(1_000_000))
     end
   end
 
