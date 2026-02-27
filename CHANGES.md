@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0 (2026-02-27)
+
+- feat: replace RwLock with arc-swap to prevent fork deadlocks and eliminate read contention (#20)
+- fix: harden native extension against lock poisoning and reduce lock contention
+- fix: performance improvements and consolidations (#15)
+
 ## 0.1.4 (2026-01-14)
 
 - feat: optimize ID generation performance
