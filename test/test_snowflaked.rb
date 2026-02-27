@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "timeout"
 
 class TestSnowflaked < ActiveSupport::TestCase
   def test_generates_unique_ids
@@ -136,6 +137,39 @@ class TestSnowflaked < ActiveSupport::TestCase
 
     refute_equal parent_machine_id, child_machine_id, "Child should reinitialize with different machine_id after fork"
     assert_equal 200, (parent_ids + child_ids).uniq.size, "Generated duplicate IDs across forked processes"
+  end
+
+  def test_fork_safety_with_background_thread # rubocop:disable Metrics/MethodLength,Metrics/AbcSize
+    stop = false
+    started = Queue.new
+    wait_timeout = 5
+
+    bg_thread = Thread.new do
+      Snowflaked.id
+      started << true
+      Snowflaked.id until stop
+    end
+
+    begin
+      Timeout.timeout(wait_timeout) { started.pop }
+
+      child_ids, = fork_and_collect do
+        require "timeout"
+        Timeout.timeout(5) do
+          [Array.new(100) { Snowflaked.id }, Snowflaked.configuration.machine_id_value]
+        end
+      end
+
+      assert_equal 100, child_ids.uniq.size
+    ensure
+      stop = true
+      unless bg_thread.join(wait_timeout)
+        bg_thread.kill
+        bg_thread.join(1)
+
+        flunk "Background thread did not stop within #{wait_timeout} seconds"
+      end
+    end
   end
 
   private

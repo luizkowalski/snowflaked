@@ -62,6 +62,7 @@ jobs:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
           cargo-cache: true
+          cache-version: ${{ matrix.rails }}
 
       - name: Fix gem directory permissions
         run: sudo chmod +t $(ruby -e 'puts Gem.default_dir')/gems
