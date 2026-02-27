@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "timeout"
 
 class TestSnowflaked < ActiveSupport::TestCase
   def test_generates_unique_ids
@@ -141,6 +142,7 @@ class TestSnowflaked < ActiveSupport::TestCase
   def test_fork_safety_with_background_thread # rubocop:disable Metrics/MethodLength,Metrics/AbcSize
     stop = false
     started = Queue.new
+    wait_timeout = 5
 
     bg_thread = Thread.new do
       Snowflaked.id
@@ -149,8 +151,7 @@ class TestSnowflaked < ActiveSupport::TestCase
     end
 
     begin
-      # Wait until the background thread has successfully generated at least one ID
-      started.pop
+      Timeout.timeout(wait_timeout) { started.pop }
 
       child_ids, = fork_and_collect do
         require "timeout"
@@ -162,7 +163,12 @@ class TestSnowflaked < ActiveSupport::TestCase
       assert_equal 100, child_ids.uniq.size
     ensure
       stop = true
-      bg_thread.join
+      unless bg_thread.join(wait_timeout)
+        bg_thread.kill
+        bg_thread.join(1)
+
+        flunk "Background thread did not stop within #{wait_timeout} seconds"
+      end
     end
   end
 
