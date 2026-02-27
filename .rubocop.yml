@@ -27,6 +27,9 @@ Style/StringLiterals:
 Style/Documentation:
   Enabled: false
 
+Style/OneClassPerFile:
+  Enabled: false
+
 Style/PercentLiteralDelimiters:
   Enabled: true
   PreferredDelimiters:
