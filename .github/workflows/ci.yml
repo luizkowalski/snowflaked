@@ -59,10 +59,10 @@ jobs:
       - uses: actions/checkout@v6
       - uses: oxidize-rb/actions/setup-ruby-and-rust@v1
         with:
-          ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
-          cargo-cache: true
           cache-version: ${{ matrix.rails }}
+          cargo-cache: true
+          ruby-version: ${{ matrix.ruby }}
 
       - name: Fix gem directory permissions
         run: sudo chmod +t $(ruby -e 'puts Gem.default_dir')/gems
