@@ -172,6 +172,17 @@ class TestSnowflaked < ActiveSupport::TestCase
     end
   end
 
+  def test_default_epoch_does_not_overflow_before_2093
+    config = Snowflaked::Configuration.new
+    epoch_ms = config.epoch_ms.to_i
+    max_snowflake_ms = (2**41) - 1
+    overflow_time = Time.at((epoch_ms + max_snowflake_ms) / 1000.0).utc
+
+    assert overflow_time.year >= 2093,
+      "Default epoch causes 41-bit timestamp overflow in #{overflow_time.year}. " \
+      "Set a default epoch of at least 2024-01-01 to push overflow to ~2093."
+  end
+
   private
 
   def fork_and_collect(&)
