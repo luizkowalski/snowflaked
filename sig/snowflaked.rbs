@@ -1,6 +1,7 @@
 module Snowflaked
   VERSION: String
   MAX_MACHINE_ID: Integer
+  DEFAULT_EPOCH: Time
 
   class Error < StandardError
   end
