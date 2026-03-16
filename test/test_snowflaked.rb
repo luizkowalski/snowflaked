@@ -172,6 +172,15 @@ class TestSnowflaked < ActiveSupport::TestCase
     end
   end
 
+  def test_epoch_ms_returns_exact_milliseconds_without_float_rounding
+    epoch = Time.at(Rational(1_704_067_200_002, 1000)).utc
+    config = Snowflaked::Configuration.new
+    config.epoch = epoch
+
+    assert_equal 1_704_067_200_002, config.epoch_ms,
+      "epoch_ms must use exact Rational arithmetic; to_f loses 1ms for sub-millisecond epoch values"
+  end
+
   def test_default_epoch_does_not_overflow_before_2093 # rubocop:disable Naming/VariableNumber
     config = Snowflaked::Configuration.new
     epoch_ms = config.epoch_ms.to_i
