@@ -36,7 +36,7 @@ module Snowflaked
     def epoch_ms
       return nil unless @epoch
 
-      (@epoch.to_f * 1000).to_i
+      (@epoch.to_r * 1000).to_i
     end
 
     private

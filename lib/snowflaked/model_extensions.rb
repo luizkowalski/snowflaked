@@ -20,10 +20,14 @@ module Snowflaked
       def _snowflake_columns_from_comments
         return @_snowflake_columns_from_comments if defined?(@_snowflake_columns_from_comments)
 
-        @_snowflake_columns_from_comments = table_exists? ? columns.filter_map { |col| col.name.to_sym if col.comment == Snowflaked::SchemaDefinitions::COMMENT } : []
+        return [] unless table_exists?
+
+        @_snowflake_columns_from_comments = columns.filter_map { |col| col.name.to_sym if col.comment == Snowflaked::SchemaDefinitions::COMMENT }
       end
 
       def _snowflake_attributes_with_columns
+        return _snowflake_attributes unless table_exists?
+
         @_snowflake_attributes_with_columns ||= (_snowflake_attributes | _snowflake_columns_from_comments)
       end
     end

@@ -61,4 +61,25 @@ class TestRailsIntegration < ActiveSupport::TestCase
 
     assert_includes snowflake_columns, :external_id
   end
+
+  def test_snowflake_columns_not_cached_when_table_does_not_exist
+    klass = Class.new(ApplicationRecord) { self.table_name = "users" }
+    klass.define_singleton_method(:table_exists?) { false }
+
+    klass._snowflake_columns_from_comments
+
+    assert_not klass.instance_variable_defined?(:@_snowflake_columns_from_comments),
+               "_snowflake_columns_from_comments must not cache [] when table does not exist; " \
+               "stale cache would prevent column detection after migrations run"
+  end
+
+  def test_snowflake_attributes_not_cached_when_table_does_not_exist
+    klass = Class.new(ApplicationRecord) { self.table_name = "users" }
+    klass.define_singleton_method(:table_exists?) { false }
+
+    klass._snowflake_attributes_with_columns
+
+    assert_not klass.instance_variable_defined?(:@_snowflake_attributes_with_columns),
+               "_snowflake_attributes_with_columns must not cache when table does not exist"
+  end
 end
