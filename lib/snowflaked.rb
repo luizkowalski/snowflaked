@@ -16,6 +16,7 @@ require_relative "snowflaked/railtie" if defined?(Rails::Railtie)
 
 module Snowflaked
   MAX_MACHINE_ID = 1023
+  DEFAULT_EPOCH = Time.utc(2024, 1, 1).freeze
 
   class Error < StandardError; end
   class ConfigurationError < Error; end
@@ -25,7 +26,7 @@ module Snowflaked
 
     def initialize
       @machine_id = nil
-      @epoch      = nil
+      @epoch      = DEFAULT_EPOCH
     end
 
     def machine_id_value

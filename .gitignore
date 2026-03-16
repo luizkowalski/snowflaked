@@ -285,3 +285,4 @@ dkms.conf
 # End of https://www.toptal.com/developers/gitignore/api/rust,ruby,rails,macos,visualstudiocode,linux,c++,c
 
 benchmarks/Gemfile.lock
+/docs/superpowers/plans
