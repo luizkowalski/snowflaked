@@ -178,7 +178,7 @@ class TestSnowflaked < ActiveSupport::TestCase
     config.epoch = epoch
 
     assert_equal 1_704_067_200_002, config.epoch_ms,
-      "epoch_ms must use exact Rational arithmetic; to_f loses 1ms for sub-millisecond epoch values"
+                 "epoch_ms must use exact Rational arithmetic; to_f loses 1ms for sub-millisecond epoch values"
   end
 
   def test_default_epoch_does_not_overflow_before_2093 # rubocop:disable Naming/VariableNumber

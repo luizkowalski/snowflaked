@@ -69,8 +69,8 @@ class TestRailsIntegration < ActiveSupport::TestCase
     klass._snowflake_columns_from_comments
 
     assert_not klass.instance_variable_defined?(:@_snowflake_columns_from_comments),
-      "_snowflake_columns_from_comments must not cache [] when table does not exist; " \
-      "stale cache would prevent column detection after migrations run"
+               "_snowflake_columns_from_comments must not cache [] when table does not exist; " \
+               "stale cache would prevent column detection after migrations run"
   end
 
   def test_snowflake_attributes_not_cached_when_table_does_not_exist
@@ -80,6 +80,6 @@ class TestRailsIntegration < ActiveSupport::TestCase
     klass._snowflake_attributes_with_columns
 
     assert_not klass.instance_variable_defined?(:@_snowflake_attributes_with_columns),
-      "_snowflake_attributes_with_columns must not cache when table does not exist"
+               "_snowflake_attributes_with_columns must not cache when table does not exist"
   end
 end

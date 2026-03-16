@@ -19,6 +19,7 @@ module Snowflaked
 
       def _snowflake_columns_from_comments
         return @_snowflake_columns_from_comments if defined?(@_snowflake_columns_from_comments)
+
         return [] unless table_exists?
 
         @_snowflake_columns_from_comments = columns.filter_map { |col| col.name.to_sym if col.comment == Snowflaked::SchemaDefinitions::COMMENT }
