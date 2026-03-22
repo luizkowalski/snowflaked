@@ -14,13 +14,6 @@ updates:
       time: "17:00"
       timezone: "Europe/Berlin"
 
-  - package-ecosystem: "cargo"
-    directory: "ext/snowflaked"
-    schedule:
-      interval: "daily"
-      time: "17:00"
-      timezone: "Europe/Berlin"
-
   - package-ecosystem: "bundler"
     directory: "/"
     schedule:
