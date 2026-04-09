@@ -298,7 +298,7 @@ DEPENDENCIES
   debug
   irb
   minitest
-  parallel (~> 2)
+  parallel
   pg
   rails!
   railties!

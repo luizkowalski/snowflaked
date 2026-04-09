@@ -188,7 +188,7 @@ DEPENDENCIES
   debug
   irb
   minitest
-  parallel (~> 2)
+  parallel
   pg
   railties (>= 7.0)
   rake

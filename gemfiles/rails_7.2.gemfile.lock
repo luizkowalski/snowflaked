@@ -290,7 +290,7 @@ DEPENDENCIES
   irb
   minitest (< 6)
   net-imap (>= 0.6.0)
-  parallel (~> 2)
+  parallel
   pg
   rails (~> 7.2)
   railties (>= 7.0)
