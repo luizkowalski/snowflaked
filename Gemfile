@@ -23,4 +23,6 @@ gem "rubocop-rake", require: false
 
 gem "appraisal", group: %i[development test]
 
+gem "parallel"
+
 gem "debug"
