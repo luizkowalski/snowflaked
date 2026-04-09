@@ -10,6 +10,7 @@ gem "appraisal", group: %i[development test]
 gem "debug"
 gem "irb"
 gem "minitest"
+gem "parallel", "~> 2"
 gem "pg"
 gem "rails", github: "rails/rails", branch: "main"
 gem "railties", github: "rails/rails", branch: "main"

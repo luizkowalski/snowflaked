@@ -23,4 +23,10 @@ gem "rubocop-rake", require: false
 
 gem "appraisal", group: %i[development test]
 
+if RUBY_VERSION < "3.3"
+  gem "parallel", "< 2"
+else
+  gem "parallel", "~> 2"
+end
+
 gem "debug"

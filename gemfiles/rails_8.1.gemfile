@@ -9,6 +9,7 @@ gem "appraisal", group: %i[development test]
 gem "debug"
 gem "irb"
 gem "minitest"
+gem "parallel", "~> 2"
 gem "pg"
 gem "rails", "~> 8.1"
 gem "railties", ">= 7.0"
