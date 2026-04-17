@@ -82,13 +82,11 @@ module Snowflaked
       Time.zone.at(seconds, milliseconds * 1000, :usec)
     end
 
-    def machine_id(id)
-      ensure_initialized!
+    def machine_id(id) # rubocop:disable Rails/Delegate
       Native.machine_id(id)
     end
 
-    def timestamp_ms(id)
-      ensure_initialized!
+    def timestamp_ms(id) # rubocop:disable Rails/Delegate
       Native.timestamp_ms(id)
     end
 
