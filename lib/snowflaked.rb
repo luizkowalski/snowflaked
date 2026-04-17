@@ -86,12 +86,12 @@ module Snowflaked
       Native.machine_id(id)
     end
 
-    def timestamp_ms(id) # rubocop:disable Rails/Delegate
+    def timestamp_ms(id)
+      ensure_initialized!
       Native.timestamp_ms(id)
     end
 
-    def sequence(id)
-      ensure_initialized!
+    def sequence(id) # rubocop:disable Rails/Delegate
       Native.sequence(id)
     end
 
