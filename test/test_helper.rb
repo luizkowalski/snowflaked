@@ -6,4 +6,4 @@ require_relative "../test/dummy/config/environment"
 require "rails/test_help"
 
 ActiveRecord::Schema.verbose = false
-load "#{Rails.root}/db/schema.rb" # Load the schema for the test database
+load Rails.root.join("db/schema.rb").to_s # Load the schema for the test database

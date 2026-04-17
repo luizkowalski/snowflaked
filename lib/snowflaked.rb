@@ -79,10 +79,11 @@ module Snowflaked
     def timestamp(id)
       ensure_initialized!
       seconds, milliseconds = Native.timestamp_ms(id).divmod(1000)
-      Time.at(seconds, milliseconds * 1000, :usec)
+      Time.zone.at(seconds, milliseconds * 1000, :usec)
     end
 
     def machine_id(id)
+      ensure_initialized!
       Native.machine_id(id)
     end
 
@@ -92,6 +93,7 @@ module Snowflaked
     end
 
     def sequence(id)
+      ensure_initialized!
       Native.sequence(id)
     end
 

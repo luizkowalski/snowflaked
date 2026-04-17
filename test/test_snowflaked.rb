@@ -102,7 +102,7 @@ class TestSnowflaked < ActiveSupport::TestCase
     id = Snowflaked.id
     timestamp = Snowflaked.timestamp(id)
 
-    assert_in_delta Time.now, timestamp, 5
+    assert_in_delta Time.zone.now, timestamp, 5
   end
 
   def test_thread_safety_under_contention
@@ -135,7 +135,7 @@ class TestSnowflaked < ActiveSupport::TestCase
 
     child_ids, child_machine_id = fork_and_collect { [Array.new(100) { Snowflaked.id }, Snowflaked.configuration.machine_id_value] }
 
-    refute_equal parent_machine_id, child_machine_id, "Child should reinitialize with different machine_id after fork"
+    assert_not_equal parent_machine_id, child_machine_id, "Child should reinitialize with different machine_id after fork"
     assert_equal 200, (parent_ids + child_ids).uniq.size, "Generated duplicate IDs across forked processes"
   end
 

@@ -44,7 +44,7 @@ module Snowflaked
     initializer "snowflaked.model_extensions", after: "active_record.initialize_database" do
       ActiveSupport.on_load(:active_record) do
         require "snowflaked/model_extensions"
-        ActiveRecord::Base.include(Snowflaked::ModelExtensions)
+        ActiveSupport.on_load(:active_record) { include Snowflaked::ModelExtensions }
       end
     end
   end
