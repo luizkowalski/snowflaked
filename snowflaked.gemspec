@@ -29,5 +29,6 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
   spec.extensions = ["ext/snowflaked/extconf.rb"]
 
+  spec.add_dependency "railties", ">= 8.0"
   spec.add_dependency "rb_sys", "~> 0.9"
 end

@@ -3,10 +3,12 @@ plugins:
   - rubocop-minitest
   - rubocop-performance
   - rubocop-rake
+  - rubocop-rails
 
 AllCops:
   TargetRubyVersion: 3.3
   NewCops: enable
+  TargetRailsVersion: 8.0
   ActiveSupportExtensionsEnabled: true
 
 # Style

@@ -25,7 +25,7 @@ ActiveRecord::Base.establish_connection(
 
 require "snowflaked/schema_definitions"
 require "snowflaked/model_extensions"
-ActiveRecord::Base.include(Snowflaked::ModelExtensions)
+ActiveSupport.on_load(:active_record) { include Snowflaked::ModelExtensions }
 
 ActiveRecord::Schema.define do
   drop_table :posts_with_snowflake_id, if_exists: true
