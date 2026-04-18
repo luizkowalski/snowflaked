@@ -1,12 +1,9 @@
 [tools]
 ruby = "4.0.2"
-rust = { version = "1.94.1", profile = "default" }
+rust = { version = "1.95", profile = "default" }
 
 [tasks]
-test = [
-  "bundle exec rake clobber",
-  "bundle exec rake",
-]
+test = ["bundle exec rake clobber", "bundle exec rake"]
 
 lint = [
   "bundle exec rubocop -A",
