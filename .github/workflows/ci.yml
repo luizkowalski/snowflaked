@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: oxidize-rb/actions/setup-ruby-and-rust@v1
         with:
-          ruby-version: '4.0.1'
+          ruby-version: '4.0.3'
           rustup-toolchain: '1.95'
           bundler-cache: true
           cargo-cache: true
