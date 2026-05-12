@@ -1,5 +1,5 @@
 [tools]
-ruby = "4.0.3"
+ruby = "4.0.4"
 rust = { version = "1.95", profile = "default" }
 
 [tasks]
