@@ -85,16 +85,7 @@ module Snowflaked
       yield(configuration) if block_given?
 
       ensure_initialized!
-
-      # The Rust generator is built once per process. If machine_id changed
-      # after the first ID was generated, Ruby and Rust would disagree, so
-      # fail loudly here instead of silently using the stale generator.
-      configured = Native.configured_machine_id
-      if configured && configured != configuration.machine_id_value
-        raise ConfigurationError,
-              "machine_id cannot be changed after the first ID is generated (currently #{configured})"
-      end
-
+      ensure_configuration_unchanged!
       configuration
     end
 
@@ -138,6 +129,22 @@ module Snowflaked
       return if Native.initialized?
 
       Native.init_generator(configuration.machine_id_value, configuration.epoch_ms)
+    end
+
+    # The Rust generator is built once per process; machine_id and epoch are
+    # locked in at that point. If either changed afterward, Ruby and Rust would
+    # disagree, so fail loudly instead of silently using the stale generator.
+    def ensure_configuration_unchanged!
+      return unless Native.initialized?
+
+      if Native.configured_machine_id != configuration.machine_id_value
+        raise ConfigurationError,
+              "machine_id cannot be changed after the first ID is generated"
+      end
+
+      return if Native.configured_epoch_ms == (configuration.epoch_ms || 0)
+
+      raise ConfigurationError, "epoch cannot be changed after the first ID is generated"
     end
   end
 end

@@ -35,4 +35,5 @@ module Snowflaked
   private
 
   def self.ensure_initialized!: () -> nil
+  def self.ensure_configuration_unchanged!: () -> void
 end

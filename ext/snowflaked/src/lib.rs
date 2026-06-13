@@ -113,6 +113,10 @@ fn configured_machine_id() -> Option<u16> {
     STATE.load().as_ref().filter(|s| s.init_pid == std::process::id()).map(|s| s.machine_id)
 }
 
+fn configured_epoch_ms() -> Option<u64> {
+    STATE.load().as_ref().filter(|s| s.init_pid == std::process::id()).map(|s| s.epoch_offset)
+}
+
 #[magnus::init]
 fn init(ruby: &Ruby) -> Result<(), Error> {
     let module = ruby.define_module("Snowflaked")?;
@@ -126,6 +130,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     internal.define_singleton_method("sequence", function!(sequence, 1))?;
     internal.define_singleton_method("initialized?", function!(is_initialized, 0))?;
     internal.define_singleton_method("configured_machine_id", function!(configured_machine_id, 0))?;
+    internal.define_singleton_method("configured_epoch_ms", function!(configured_epoch_ms, 0))?;
 
     Ok(())
 }

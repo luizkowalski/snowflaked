@@ -151,9 +151,8 @@ tl;dr: Snowflake IDs have a negligible performance impact compared to database-b
 
 ## Requirements
 
-- Ruby >= 3.2
-- rustc >= 1.81.0
-- cargo >= 1.81.0
+- Ruby >= 3.3
+- rustc / cargo >= 1.81.0 (development uses the toolchain pinned in `mise.toml`)
 - Mise
 
 ## Development

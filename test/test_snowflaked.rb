@@ -246,6 +246,15 @@ class TestSnowflaked < ActiveSupport::TestCase
     Snowflaked.configuration.machine_id = original
   end
 
+  def test_reconfiguring_epoch_raises
+    original = Snowflaked.configuration.epoch
+    Snowflaked.configuration.epoch = Time.utc(2020, 1, 1)
+
+    assert_raises(Snowflaked::ConfigurationError) { Snowflaked.configure }
+  ensure
+    Snowflaked.configuration.epoch = original
+  end
+
   private
 
   def fork_and_collect(&)
