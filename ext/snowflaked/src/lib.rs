@@ -68,7 +68,10 @@ fn generate(ruby: &Ruby, machine_id: u16, epoch_ms: Option<u64>) -> Result<u64, 
     let (state, _) = ensure_state(machine_id, epoch_offset, std::process::id());
 
     validate_config(ruby, &state, machine_id, epoch_offset)?;
-    Ok(state.generator.generate())
+
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| state.generator.generate::<i64>()))
+        .map(|id| id as u64)
+        .map_err(|_| Error::new(ruby.exception_runtime_error(), "Snowflaked: system clock moved backwards; cannot generate a monotonic ID"))
 }
 
 fn epoch_offset(ruby: &Ruby) -> Result<u64, Error> {

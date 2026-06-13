@@ -191,6 +191,61 @@ class TestSnowflaked < ActiveSupport::TestCase
                                                    "Set a default epoch of at least 2024-01-01 to push overflow to ~2093."
   end
 
+  def test_ids_are_non_negative
+    1000.times { assert_operator Snowflaked.id, :>=, 0 }
+  end
+
+  def test_machine_id_value_computed_once_per_process
+    config = Snowflaked::Configuration.new
+    calls = []
+    Socket.singleton_class.prepend(Module.new do
+      define_method(:gethostname) do
+        calls << true
+        super()
+      end
+    end)
+
+    3.times { config.machine_id_value }
+
+    assert_equal 1, calls.size, "machine_id_value must memoize and not call gethostname on every access"
+  end
+
+  def test_explicit_out_of_range_machine_id_raises
+    config = Snowflaked::Configuration.new
+    config.machine_id = Snowflaked::MAX_MACHINE_ID + 1
+
+    assert_raises(Snowflaked::ConfigurationError) { config.machine_id_value }
+  end
+
+  def test_non_integer_env_machine_id_raises
+    config = Snowflaked::Configuration.new
+
+    ENV["SNOWFLAKED_MACHINE_ID"] = "not-a-number"
+    assert_raises(Snowflaked::ConfigurationError) { config.machine_id_value }
+  ensure
+    ENV.delete("SNOWFLAKED_MACHINE_ID")
+  end
+
+  def test_timestamp_falls_back_to_utc_without_time_zone
+    id = Snowflaked.id
+
+    Time.use_zone(nil) do
+      timestamp = Snowflaked.timestamp(id)
+
+      assert_kind_of Time, timestamp
+      assert_predicate timestamp, :utc?
+    end
+  end
+
+  def test_reconfiguring_machine_id_raises
+    original = Snowflaked.configuration.machine_id
+    Snowflaked.configuration.machine_id = (Snowflaked::Native.configured_machine_id + 1) % (Snowflaked::MAX_MACHINE_ID + 1)
+
+    assert_raises(Snowflaked::ConfigurationError) { Snowflaked.configure }
+  ensure
+    Snowflaked.configuration.machine_id = original
+  end
+
   private
 
   def fork_and_collect(&)
