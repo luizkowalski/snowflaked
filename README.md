@@ -102,14 +102,12 @@ If `machine_id` is not explicitly configured, it resolves in this order:
 2. `MACHINE_ID` environment variable
 3. Auto-detected using the following formula: `(hostname.hash ^ pid) % 1024`
 
-For Kubernetes deployments, you can set the machine ID using an environment variable:
+For Kubernetes deployments, set the machine ID to a numeric value between `0` and `1023`:
 
 ```yaml
 env:
   - name: SNOWFLAKED_MACHINE_ID
-    valueFrom:
-      fieldRef:
-        fieldPath: metadata.name
+    value: "42"
 ```
 
 Or use a StatefulSet ordinal for guaranteed unique values:
