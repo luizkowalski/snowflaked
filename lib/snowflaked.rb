@@ -27,23 +27,35 @@ module Snowflaked
     def initialize
       @machine_id = nil
       @epoch      = DEFAULT_EPOCH
+      @sealed     = false
     end
 
     def machine_id=(value)
-      @machine_id       = value
-      @machine_id_value = nil
+      raise_if_sealed!(:machine_id)
+
+      @machine_id           = value.nil? ? nil : checked_machine_id(value)
+      @machine_id_value     = nil
+      @machine_id_value_pid = nil
     end
 
     def epoch=(value)
+      raise_if_sealed!(:epoch)
+
       @epoch    = value
       @epoch_ms = nil
     end
 
-    def machine_id_value
-      return @machine_id_value if @machine_id_value && @machine_id_value_pid == Process.pid
+    def seal!
+      @sealed = true
+    end
 
-      @machine_id_value_pid = Process.pid
-      @machine_id_value     = resolve_machine_id
+    def machine_id_value
+      if @machine_id_value_pid != Process.pid
+        @machine_id_value     = resolve_machine_id
+        @machine_id_value_pid = Process.pid
+      end
+
+      @machine_id_value
     end
 
     def epoch_ms
@@ -57,7 +69,7 @@ module Snowflaked
     # Resolution order: explicit config, then env vars, then an auto fallback.
     # Explicit and env values are range-checked; the fallback is always valid.
     def resolve_machine_id
-      return checked_machine_id(@machine_id) if @machine_id
+      return @machine_id unless @machine_id.nil?
 
       env = ENV["SNOWFLAKED_MACHINE_ID"] || ENV.fetch("MACHINE_ID", nil)
       return checked_machine_id(env) if env
@@ -74,6 +86,12 @@ module Snowflaked
 
       raise ConfigurationError, "machine_id must be an integer between 0 and #{MAX_MACHINE_ID}, got #{value.inspect}"
     end
+
+    def raise_if_sealed!(attribute)
+      return unless @sealed
+
+      raise ConfigurationError, "#{attribute} cannot be changed after Snowflaked has been configured"
+    end
   end
 
   class << self
@@ -85,13 +103,12 @@ module Snowflaked
       yield(configuration) if block_given?
 
       ensure_initialized!
-      ensure_configuration_unchanged!
       configuration
     end
 
     def id
-      config = configuration
-      Native.generate(config.machine_id_value, config.epoch_ms)
+      ensure_initialized!
+      Native.generate
     end
 
     def parse(id)
@@ -126,25 +143,13 @@ module Snowflaked
     private
 
     def ensure_initialized!
-      return if Native.initialized?
+      return if @native_initialized_pid == Process.pid
 
-      Native.init_generator(configuration.machine_id_value, configuration.epoch_ms)
-    end
+      config = configuration
+      config.seal!
 
-    # The Rust generator is built once per process; machine_id and epoch are
-    # locked in at that point. If either changed afterward, Ruby and Rust would
-    # disagree, so fail loudly instead of silently using the stale generator.
-    def ensure_configuration_unchanged!
-      return unless Native.initialized?
-
-      if Native.configured_machine_id != configuration.machine_id_value
-        raise ConfigurationError,
-              "machine_id cannot be changed after the first ID is generated"
-      end
-
-      return if Native.configured_epoch_ms == (configuration.epoch_ms || 0)
-
-      raise ConfigurationError, "epoch cannot be changed after the first ID is generated"
+      Native.init_generator(config.machine_id_value, config.epoch_ms)
+      @native_initialized_pid = Process.pid
     end
   end
 end

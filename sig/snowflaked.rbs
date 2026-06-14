@@ -14,6 +14,7 @@ module Snowflaked
     attr_accessor epoch: Time?
 
     def initialize: () -> void
+    def seal!: () -> true
     def machine_id_value: () -> Integer
     def epoch_ms: () -> Integer?
 
@@ -35,5 +36,4 @@ module Snowflaked
   private
 
   def self.ensure_initialized!: () -> nil
-  def self.ensure_configuration_unchanged!: () -> void
 end

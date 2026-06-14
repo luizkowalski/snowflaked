@@ -172,6 +172,19 @@ class TestSnowflaked < ActiveSupport::TestCase
     end
   end
 
+  def test_first_generation_after_fork_is_thread_safe
+    child_ids, = fork_and_collect do
+      threads = Array.new(20) do
+        Thread.new { Array.new(100) { Snowflaked.id } }
+      end
+
+      [threads.flat_map(&:value)]
+    end
+
+    assert_equal 2000, child_ids.size
+    assert_equal 2000, child_ids.uniq.size
+  end
+
   def test_epoch_ms_returns_exact_milliseconds_without_float_rounding
     epoch = Time.at(Rational(1_704_067_200_002, 1000)).utc
     config = Snowflaked::Configuration.new
@@ -197,24 +210,45 @@ class TestSnowflaked < ActiveSupport::TestCase
 
   def test_machine_id_value_computed_once_per_process
     config = Snowflaked::Configuration.new
-    calls = []
-    Socket.singleton_class.prepend(Module.new do
-      define_method(:gethostname) do
-        calls << true
-        super()
-      end
-    end)
+    calls = 0
+
+    config.define_singleton_method(:resolve_machine_id) do
+      calls += 1
+      123
+    end
 
     3.times { config.machine_id_value }
 
-    assert_equal 1, calls.size, "machine_id_value must memoize and not call gethostname on every access"
+    assert_equal 1, calls, "machine_id_value must memoize and not resolve on every access"
+  end
+
+  def test_machine_id_value_refreshes_value_before_pid
+    old_pid = Process.pid - 1
+    config = configuration_with_stale_machine_id(old_pid)
+    pid_seen_while_resolving = nil
+
+    config.define_singleton_method(:resolve_machine_id) do
+      pid_seen_while_resolving = instance_variable_get(:@machine_id_value_pid)
+      456
+    end
+
+    assert_equal 456, config.machine_id_value
+    assert_equal old_pid, pid_seen_while_resolving
+    assert_equal Process.pid, config.instance_variable_get(:@machine_id_value_pid)
+  end
+
+  def test_machine_id_writer_clears_cached_process_value
+    config = Snowflaked::Configuration.new
+    config.machine_id_value
+    config.machine_id = 456
+
+    assert_equal 456, config.machine_id_value
   end
 
   def test_explicit_out_of_range_machine_id_raises
     config = Snowflaked::Configuration.new
-    config.machine_id = Snowflaked::MAX_MACHINE_ID + 1
 
-    assert_raises(Snowflaked::ConfigurationError) { config.machine_id_value }
+    assert_raises(Snowflaked::ConfigurationError) { config.machine_id = Snowflaked::MAX_MACHINE_ID + 1 }
   end
 
   def test_non_integer_env_machine_id_raises
@@ -237,35 +271,53 @@ class TestSnowflaked < ActiveSupport::TestCase
     end
   end
 
-  def test_reconfiguring_machine_id_raises
-    original = Snowflaked.configuration.machine_id
-    Snowflaked.configuration.machine_id = (Snowflaked::Native.configured_machine_id + 1) % (Snowflaked::MAX_MACHINE_ID + 1)
+  def test_machine_id_cannot_change_after_configuration_is_sealed
+    config = Snowflaked::Configuration.new
+    config.machine_id = 123
+    config.seal!
 
-    assert_raises(Snowflaked::ConfigurationError) { Snowflaked.configure }
-  ensure
-    Snowflaked.configuration.machine_id = original
+    assert_raises(Snowflaked::ConfigurationError) { config.machine_id = 456 }
+    assert_equal 123, config.machine_id
   end
 
-  def test_reconfiguring_epoch_raises
-    original = Snowflaked.configuration.epoch
-    Snowflaked.configuration.epoch = Time.utc(2020, 1, 1)
+  def test_epoch_cannot_change_after_configuration_is_sealed
+    epoch = Time.utc(2024, 1, 1)
+    config = Snowflaked::Configuration.new
+    config.epoch = epoch
+    config.seal!
 
-    assert_raises(Snowflaked::ConfigurationError) { Snowflaked.configure }
-  ensure
-    Snowflaked.configuration.epoch = original
+    assert_raises(Snowflaked::ConfigurationError) { config.epoch = Time.utc(2025, 1, 1) }
+    assert_equal epoch, config.epoch
   end
 
   private
 
-  def fork_and_collect(&)
-    IO.pipe do |read_io, write_io|
-      pid = fork do
-        read_io.close
-        write_io.puts(JSON.dump(yield))
-        exit!(0)
-      end
-      write_io.close
-      JSON.parse(read_io.read).tap { Process.wait(pid) }
+  def configuration_with_stale_machine_id(old_pid)
+    Snowflaked::Configuration.new.tap do |config|
+      config.instance_variable_set(:@machine_id_value, 123)
+      config.instance_variable_set(:@machine_id_value_pid, old_pid)
     end
+  end
+
+  def fork_and_collect(&block)
+    IO.pipe do |read_io, write_io|
+      pid = fork { write_child_payload(read_io, write_io, block) }
+      write_io.close
+      parse_child_payload(read_io.read, pid)
+    end
+  end
+
+  def write_child_payload(read_io, write_io, block)
+    read_io.close
+    write_io.puts(JSON.dump(block.call))
+    exit!(0)
+  end
+
+  def parse_child_payload(payload, pid)
+    _, status = Process.wait2(pid)
+
+    assert_predicate status, :success?, "forked child exited unsuccessfully"
+
+    JSON.parse(payload)
   end
 end

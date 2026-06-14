@@ -87,10 +87,12 @@ Snowflaked.configure do |config|
 end
 ```
 
+Configuration is locked after `Snowflaked.configure` or the first generated/parsed ID. Set it during application boot, before request threads start.
+
 ### Machine ID
 
 > [!TIP]
-> For multi-process servers like Puma, it is recommended to **not** configure `machine_id` explicitly. The gem automatically calculates a unique machine ID using `(hostname.hash ^ pid) % 1024`, which ensures each forked worker process gets a different ID and avoids duplicate Snowflake IDs.
+> For multi-process servers like Puma, it is recommended to **not** configure `machine_id` explicitly. The gem automatically calculates a process-local machine ID using `(hostname.hash ^ pid) % 1024`, so forked workers do not reuse the parent's cached machine ID.
 
 If you must set `machine_id` explicitly, use environment variables that differ per worker process.
 
