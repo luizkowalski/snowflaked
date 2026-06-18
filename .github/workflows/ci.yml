@@ -10,7 +10,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: oxidize-rb/actions/setup-ruby-and-rust@v1
         with:
           ruby-version: '4.0.5'
@@ -54,7 +54,7 @@ jobs:
         rails: ["rails-8.0", "rails-8.1", "rails-main"]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: oxidize-rb/actions/setup-ruby-and-rust@v1
         with:
           bundler-cache: true
