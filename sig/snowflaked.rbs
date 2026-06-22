@@ -14,14 +14,14 @@ module Snowflaked
     attr_accessor epoch: Time?
 
     def initialize: () -> void
+    def seal!: () -> true
     def machine_id_value: () -> Integer
     def epoch_ms: () -> Integer?
 
     private
 
-    def default_machine_id: () -> Integer
-    def env_machine_id: () -> Integer?
-    def hostname_pid_hash: () -> Integer
+    def resolve_machine_id: () -> Integer
+    def checked_machine_id: (untyped value) -> Integer
   end
 
   def self.configuration: () -> Configuration
