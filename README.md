@@ -87,10 +87,12 @@ Snowflaked.configure do |config|
 end
 ```
 
+Configuration is locked after `Snowflaked.configure` or the first generated/parsed ID. Set it during application boot, before request threads start.
+
 ### Machine ID
 
 > [!TIP]
-> For multi-process servers like Puma, it is recommended to **not** configure `machine_id` explicitly. The gem automatically calculates a unique machine ID using `(hostname.hash ^ pid) % 1024`, which ensures each forked worker process gets a different ID and avoids duplicate Snowflake IDs.
+> For multi-process servers like Puma, it is recommended to **not** configure `machine_id` explicitly. The gem automatically calculates a process-local machine ID using `(hostname.hash ^ pid) % 1024`, so forked workers do not reuse the parent's cached machine ID.
 
 If you must set `machine_id` explicitly, use environment variables that differ per worker process.
 
@@ -102,14 +104,12 @@ If `machine_id` is not explicitly configured, it resolves in this order:
 2. `MACHINE_ID` environment variable
 3. Auto-detected using the following formula: `(hostname.hash ^ pid) % 1024`
 
-For Kubernetes deployments, you can set the machine ID using an environment variable:
+For Kubernetes deployments, set the machine ID to a numeric value between `0` and `1023`:
 
 ```yaml
 env:
   - name: SNOWFLAKED_MACHINE_ID
-    valueFrom:
-      fieldRef:
-        fieldPath: metadata.name
+    value: "42"
 ```
 
 Or use a StatefulSet ordinal for guaranteed unique values:
@@ -151,9 +151,8 @@ tl;dr: Snowflake IDs have a negligible performance impact compared to database-b
 
 ## Requirements
 
-- Ruby >= 3.2
-- rustc >= 1.81.0
-- cargo >= 1.81.0
+- Ruby >= 3.3
+- rustc / cargo >= 1.81.0 (development uses the toolchain pinned in `mise.toml`)
 - Mise
 
 ## Development

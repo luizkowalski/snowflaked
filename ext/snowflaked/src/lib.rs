@@ -8,7 +8,6 @@ use std::time::UNIX_EPOCH;
 struct GeneratorState {
     generator: Generator,
     epoch_offset: u64,
-    machine_id: u16,
     init_pid: u32,
 }
 
@@ -29,11 +28,10 @@ fn ensure_state(machine_id: u16, epoch_offset: u64, current_pid: u32) -> (Arc<Ge
     let new_state = Arc::new(GeneratorState {
         generator: build_generator(machine_id, epoch_offset),
         epoch_offset,
-        machine_id,
         init_pid: current_pid,
     });
 
-    let prev_state = STATE.rcu(|current| {
+    STATE.rcu(|current| {
         if let Some(c) = current {
             if c.init_pid == current_pid {
                 return Arc::clone(c);
@@ -42,10 +40,10 @@ fn ensure_state(machine_id: u16, epoch_offset: u64, current_pid: u32) -> (Arc<Ge
         Arc::clone(&new_state)
     });
 
-    match prev_state.as_ref() {
-        Some(s) if s.init_pid == current_pid => (Arc::clone(s), false),
-        _ => (new_state, true),
-    }
+    let state = STATE.load_full().expect("generator state should be initialized");
+    let swapped = Arc::ptr_eq(&state, &new_state);
+
+    (state, swapped)
 }
 
 fn init_generator(machine_id: u16, epoch_ms: Option<u64>) -> bool {
@@ -53,30 +51,23 @@ fn init_generator(machine_id: u16, epoch_ms: Option<u64>) -> bool {
     swapped
 }
 
-fn validate_config(ruby: &Ruby, s: &GeneratorState, machine_id: u16, epoch_offset: u64) -> Result<(), Error> {
-    if s.machine_id != machine_id || s.epoch_offset != epoch_offset {
-        return Err(Error::new(
-            ruby.exception_runtime_error(),
-            "Generator already initialized with a different machine_id or epoch for this process",
-        ));
-    }
-    Ok(())
+fn current_state(ruby: &Ruby) -> Result<Arc<GeneratorState>, Error> {
+    STATE
+        .load_full()
+        .filter(|s| s.init_pid == std::process::id())
+        .ok_or_else(|| Error::new(ruby.exception_runtime_error(), "Generator not initialized"))
 }
 
-fn generate(ruby: &Ruby, machine_id: u16, epoch_ms: Option<u64>) -> Result<u64, Error> {
-    let epoch_offset = epoch_ms.unwrap_or(0);
-    let (state, _) = ensure_state(machine_id, epoch_offset, std::process::id());
+fn generate(ruby: &Ruby) -> Result<u64, Error> {
+    let state = current_state(ruby)?;
 
-    validate_config(ruby, &state, machine_id, epoch_offset)?;
-    Ok(state.generator.generate())
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| state.generator.generate::<i64>()))
+        .map(|id| id as u64)
+        .map_err(|_| Error::new(ruby.exception_runtime_error(), "Snowflaked: system clock moved backwards; cannot generate a monotonic ID"))
 }
 
 fn epoch_offset(ruby: &Ruby) -> Result<u64, Error> {
-    STATE
-        .load()
-        .as_ref()
-        .map(|s| s.epoch_offset)
-        .ok_or_else(|| Error::new(ruby.exception_runtime_error(), "Generator not initialized"))
+    current_state(ruby).map(|s| s.epoch_offset)
 }
 
 fn parse(ruby: &Ruby, id: u64) -> Result<RHash, Error> {
@@ -106,23 +97,18 @@ fn is_initialized() -> bool {
     STATE.load().as_ref().is_some_and(|s| s.init_pid == std::process::id())
 }
 
-fn configured_machine_id() -> Option<u16> {
-    STATE.load().as_ref().filter(|s| s.init_pid == std::process::id()).map(|s| s.machine_id)
-}
-
 #[magnus::init]
 fn init(ruby: &Ruby) -> Result<(), Error> {
     let module = ruby.define_module("Snowflaked")?;
     let internal = module.define_module("Native")?;
 
     internal.define_singleton_method("init_generator", function!(init_generator, 2))?;
-    internal.define_singleton_method("generate", function!(generate, 2))?;
+    internal.define_singleton_method("generate", function!(generate, 0))?;
     internal.define_singleton_method("parse", function!(parse, 1))?;
     internal.define_singleton_method("timestamp_ms", function!(timestamp_ms, 1))?;
     internal.define_singleton_method("machine_id", function!(machine_id_from_id, 1))?;
     internal.define_singleton_method("sequence", function!(sequence, 1))?;
     internal.define_singleton_method("initialized?", function!(is_initialized, 0))?;
-    internal.define_singleton_method("configured_machine_id", function!(configured_machine_id, 0))?;
 
     Ok(())
 }
