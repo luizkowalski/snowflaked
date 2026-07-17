@@ -1,5 +1,11 @@
 # Changelog
 
+# 0.3.0 (2026-07-17)
+
+- feat: epoch now defaults to Jan 1st. 2024, old behavior can be maintained by setting epoch to nil in the configuration
+- chore: dropped support to Rails <= 7.2 and ruby < 3.3
+- fix: Ruby now owns configuration resolution and locks it before native extension initialization to prevent race conditions
+
 ## 0.2.0 (2026-02-27)
 
 - feat: replace RwLock with arc-swap to prevent fork deadlocks and eliminate read contention (#20)
