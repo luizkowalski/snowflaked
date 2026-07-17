@@ -6,7 +6,7 @@ module Snowflaked
 
     included do
       class_attribute :_snowflake_attributes, instance_writer: false, default: [:id]
-      before_validation :_generate_snowflake_ids, on: :create
+      before_create :_generate_snowflake_ids
     end
 
     class_methods do

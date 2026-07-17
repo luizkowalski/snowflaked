@@ -280,6 +280,20 @@ class TestSnowflaked < ActiveSupport::TestCase
     assert_equal 123, config.machine_id
   end
 
+  def test_nil_epoch_falls_back_to_unix_epoch
+    config = Snowflaked::Configuration.new
+    config.epoch = nil
+
+    assert_nil config.epoch
+    assert_nil config.epoch_ms
+  end
+
+  def test_future_epoch_raises
+    config = Snowflaked::Configuration.new
+
+    assert_raises(Snowflaked::ConfigurationError) { config.epoch = Time.now.utc + 3600 }
+  end
+
   def test_epoch_cannot_change_after_configuration_is_sealed
     epoch = Time.utc(2024, 1, 1)
     config = Snowflaked::Configuration.new

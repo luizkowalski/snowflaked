@@ -97,8 +97,29 @@ fn is_initialized() -> bool {
     STATE.load().as_ref().is_some_and(|s| s.init_pid == std::process::id())
 }
 
+// The generator panics when the clock steps backwards; generate() catches it
+// and raises a Ruby error, but the default panic hook would still print a
+// message and backtrace to stderr on every call. Silence only that panic.
+fn install_panic_hook() {
+    let prev = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let clock_panic = info
+            .payload()
+            .downcast_ref::<&str>()
+            .copied()
+            .or_else(|| info.payload().downcast_ref::<String>().map(String::as_str))
+            .is_some_and(|msg| msg.contains("Clock has moved backwards") || msg.contains("clock went backwards"));
+
+        if !clock_panic {
+            prev(info);
+        }
+    }));
+}
+
 #[magnus::init]
 fn init(ruby: &Ruby) -> Result<(), Error> {
+    install_panic_hook();
+
     let module = ruby.define_module("Snowflaked")?;
     let internal = module.define_module("Native")?;
 

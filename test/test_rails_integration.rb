@@ -33,6 +33,14 @@ class TestRailsIntegration < ActiveSupport::TestCase
     assert_predicate user.external_id, :positive?
   end
 
+  def test_generates_id_when_saving_without_validations
+    user = User.new(name: "Test")
+    user.save(validate: false)
+
+    assert_predicate user.id, :present?
+    assert_predicate user.external_id, :present?
+  end
+
   def test_does_not_overwrite_existing_id
     existing_id = 12_345
     user = User.create!(name: "Test", external_id: existing_id)
