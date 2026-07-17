@@ -80,9 +80,10 @@ module Snowflaked
       (Socket.gethostname.hash ^ Process.pid) % (MAX_MACHINE_ID + 1)
     end
 
-    # Ensure the epoch is a time-like value not in the future, else raise.
+    # Ensure the epoch is nil (Unix epoch) or a time-like value not in the
+    # future, else raise.
     def checked_epoch(value)
-      return value if !value.nil? && value.respond_to?(:to_r) && value.to_r <= Time.now.utc.to_r
+      return value if value.nil? || (value.respond_to?(:to_r) && value.to_r <= Time.now.utc.to_r)
 
       raise ConfigurationError, "epoch must be a time in the past, got #{value.inspect}"
     end

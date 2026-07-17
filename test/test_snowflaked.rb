@@ -280,10 +280,12 @@ class TestSnowflaked < ActiveSupport::TestCase
     assert_equal 123, config.machine_id
   end
 
-  def test_nil_epoch_raises
+  def test_nil_epoch_falls_back_to_unix_epoch
     config = Snowflaked::Configuration.new
+    config.epoch = nil
 
-    assert_raises(Snowflaked::ConfigurationError) { config.epoch = nil }
+    assert_nil config.epoch
+    assert_nil config.epoch_ms
   end
 
   def test_future_epoch_raises

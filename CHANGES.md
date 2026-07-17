@@ -3,7 +3,7 @@
 ## main
 
 - fix: generate IDs in `before_create` instead of `before_validation`, so `save(validate: false)` gets IDs; `insert_all`/`upsert_all` still skip generation (documented). IDs are no longer available during validations
-- fix: validate that `epoch` is a time-like value in the past; **breaking**: `epoch = nil` (Unix epoch) is no longer accepted
+- fix: validate that `epoch` is a time-like value in the past; `epoch = nil` (Unix epoch) remains supported
 - fix: silence the Rust panic output for the expected clock-backwards panic; it is still raised as a `RuntimeError`
 - docs: warn that sharing a `machine_id` across processes (e.g. fixed `SNOWFLAKED_MACHINE_ID` with clustered Puma) can produce duplicate IDs; document auto-detection collision odds and clock-backwards behavior
 
