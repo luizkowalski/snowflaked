@@ -5,28 +5,22 @@ module Snowflaked
     extend ActiveSupport::Concern
 
     included do
-      _init_snowflake_attributes
+      self._snowflake_attributes = [:id].freeze
       before_create :_generate_snowflake_ids
     end
 
     class_methods do
+      attr_accessor :_snowflake_attributes
+
       def inherited(subclass)
         super
-        subclass._init_snowflake_attributes(_snowflake_attributes)
-      end
-
-      def _init_snowflake_attributes(attrs = [:id].freeze)
-        @_snowflake_attributes = attrs
-      end
-
-      def _snowflake_attributes
-        @_snowflake_attributes
+        subclass._snowflake_attributes = _snowflake_attributes
       end
 
       def snowflake_id(*attributes, id: true)
         attrs = attributes.map(&:to_sym)
         attrs |= [:id] if id
-        @_snowflake_attributes = attrs.freeze
+        self._snowflake_attributes = attrs.freeze
         @_snowflake_attributes_with_columns = nil
       end
 

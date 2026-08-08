@@ -27,17 +27,6 @@ jobs:
       - name: Rustfmt
         run: cargo fmt --manifest-path ext/snowflaked/Cargo.toml --check
 
-  ractor-audit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: oxidize-rb/actions/setup-ruby-and-rust@v1
-        with:
-          ruby-version: '4.0.6'
-          rustup-toolchain: '1.96'
-          bundler-cache: true
-          cargo-cache: true
-
       - name: Compile
         run: bundle exec rake compile
 
