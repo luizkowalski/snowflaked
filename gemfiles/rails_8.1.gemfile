@@ -6,7 +6,6 @@ source "https://rubygems.org"
 
 gem "activerecord", ">= 7.0"
 gem "appraisal", group: %i[development test]
-gem "audition", require: false
 gem "debug"
 gem "irb"
 gem "minitest"

@@ -30,8 +30,11 @@ jobs:
       - name: Compile
         run: bundle exec rake compile
 
+      - name: Install audition
+        run: gem install audition --no-document
+
       - name: Audition (Ractor-safety audit)
-        run: bundle exec audition . --format github
+        run: audition . --format github
 
   test:
     runs-on: ubuntu-latest
