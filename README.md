@@ -90,7 +90,9 @@ Snowflaked.configure do |config|
 end
 ```
 
-Configuration is locked after `Snowflaked.configure` or the first generated/parsed ID. Set it during application boot, before request threads start.
+Configuration locks after you call `Snowflaked.configure`, or after the first generated or parsed ID. Set your configuration during application boot. Do this before you start request threads.
+
+If you use Ractors, set your configuration before you start any other Ractor. See [Ractor Safety](#ractor-safety) below for the reason.
 
 ### Machine ID
 
@@ -127,6 +129,12 @@ With Puma in cluster mode, leave `machine_id` unset and let each worker derive i
 ### Clock Safety
 
 Snowflake IDs require a monotonically increasing clock. If the system clock steps backwards (NTP correction, VM migration), `Snowflaked.id` raises a `RuntimeError` instead of risking duplicate IDs, and keeps raising until the clock catches up with the last generated timestamp. Run NTP in slew mode (the default on most systems) to avoid backward steps.
+
+### Ractor Safety
+
+This gem works inside a Ruby Ractor. CI runs the [`audition`](https://github.com/yaroslav/audition) gem on every change, to check this.
+
+One rule applies. Call `Snowflaked.configure`, or generate the first ID, on the main Ractor. Do this before you start any other Ractor. `Snowflaked::Configuration` must stay open to change: it re-derives `machine_id` after each fork. For this reason, only the main Ractor can set it up safely, and every other Ractor must find it already set up.
 
 ## API Reference
 

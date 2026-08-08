@@ -27,6 +27,15 @@ jobs:
       - name: Rustfmt
         run: cargo fmt --manifest-path ext/snowflaked/Cargo.toml --check
 
+      - name: Compile
+        run: bundle exec rake compile
+
+      - name: Install audition
+        run: gem install audition --no-document
+
+      - name: Audition (Ractor-safety audit)
+        run: audition . --format github
+
   test:
     runs-on: ubuntu-latest
     services:

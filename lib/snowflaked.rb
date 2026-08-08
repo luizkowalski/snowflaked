@@ -104,8 +104,14 @@ module Snowflaked
   end
 
   class << self
+    # Call .configure, or generate the first ID, on the main Ractor.
+    # Do this before you start any other Ractor.
+    # The Configuration object must stay mutable. You can set machine_id
+    # and epoch. The code also sets a new machine_id after each fork.
+    # For this reason, audition cannot show that this object is safe to
+    # share between Ractors.
     def configuration
-      @configuration ||= Configuration.new
+      @configuration ||= Configuration.new # audition:disable class-level-state
     end
 
     def configure
@@ -158,7 +164,7 @@ module Snowflaked
       config.seal!
 
       Native.init_generator(config.machine_id_value, config.epoch_ms)
-      @native_initialized_pid = Process.pid
+      @native_initialized_pid = Ractor.make_shareable(Process.pid) rescue Process.pid # rubocop:disable Style/RescueModifier
     end
   end
 end
