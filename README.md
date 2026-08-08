@@ -90,7 +90,7 @@ Snowflaked.configure do |config|
 end
 ```
 
-Configuration is locked after `Snowflaked.configure` or the first generated/parsed ID. Set it during application boot, before request threads start.
+Configuration is locked after `Snowflaked.configure` or the first generated/parsed ID. Set it during application boot, before request threads start — and, if you use Ractors, before any Ractor is spawned. `Snowflaked.configuration` lives on the class object and stays mutable to support per-fork machine ID re-derivation, so it cannot be shared safely with a Ractor that didn't exist yet when it was warmed.
 
 ### Machine ID
 

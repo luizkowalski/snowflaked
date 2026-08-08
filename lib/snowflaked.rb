@@ -104,8 +104,12 @@ module Snowflaked
   end
 
   class << self
+    # Must be warmed by .configure or the first .id/.parse call on the main
+    # Ractor, before any Ractor is spawned: Configuration stays mutable
+    # (machine_id/epoch setup, then per-fork machine_id re-derivation), so it
+    # can never be proven Ractor-shareable statically.
     def configuration
-      @configuration ||= Configuration.new
+      @configuration ||= Configuration.new # audition:disable class-level-state
     end
 
     def configure
@@ -158,7 +162,7 @@ module Snowflaked
       config.seal!
 
       Native.init_generator(config.machine_id_value, config.epoch_ms)
-      @native_initialized_pid = Process.pid
+      @native_initialized_pid = Ractor.make_shareable(Process.pid) rescue Process.pid # rubocop:disable Style/RescueModifier
     end
   end
 end

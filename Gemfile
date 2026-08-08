@@ -27,3 +27,5 @@ gem "appraisal", group: %i[development test]
 gem "parallel"
 
 gem "debug"
+
+gem "audition", require: false
