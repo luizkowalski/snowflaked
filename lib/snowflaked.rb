@@ -104,10 +104,12 @@ module Snowflaked
   end
 
   class << self
-    # Must be warmed by .configure or the first .id/.parse call on the main
-    # Ractor, before any Ractor is spawned: Configuration stays mutable
-    # (machine_id/epoch setup, then per-fork machine_id re-derivation), so it
-    # can never be proven Ractor-shareable statically.
+    # Call .configure, or generate the first ID, on the main Ractor.
+    # Do this before you start any other Ractor.
+    # The Configuration object must stay mutable. You can set machine_id
+    # and epoch. The code also sets a new machine_id after each fork.
+    # For this reason, audition cannot show that this object is safe to
+    # share between Ractors.
     def configuration
       @configuration ||= Configuration.new # audition:disable class-level-state
     end
