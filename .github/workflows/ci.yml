@@ -14,7 +14,7 @@ jobs:
       - uses: oxidize-rb/actions/setup-ruby-and-rust@v1
         with:
           ruby-version: '4.0.6'
-          rustup-toolchain: '1.96'
+          rustup-toolchain: '1.98'
           bundler-cache: true
           cargo-cache: true
 
@@ -70,7 +70,7 @@ jobs:
           cache-version: ${{ matrix.rails }}
           cargo-cache: true
           ruby-version: ${{ matrix.ruby }}
-          rustup-toolchain: '1.96'
+          rustup-toolchain: '1.98'
 
       - name: Fix gem directory permissions
         run: sudo chmod +t $(ruby -e 'puts Gem.default_dir')/gems
