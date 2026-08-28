@@ -82,9 +82,12 @@ module Snowflaked
       def run
         loop do
           port, message = Ractor.select(Ractor.current.default_port, *@leases.keys)
-          released = @leases.delete(port)
 
-          released ? @free << released : lease(*message)
+          if (released = @leases.delete(port))
+            @free << released
+          else
+            lease(*message)
+          end
         end
       end
 
