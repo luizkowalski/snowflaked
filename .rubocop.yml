@@ -6,7 +6,7 @@ plugins:
   - rubocop-rails
 
 AllCops:
-  TargetRubyVersion: 3.3
+  TargetRubyVersion: 3.4
   NewCops: enable
   TargetRailsVersion: 8.0
   ActiveSupportExtensionsEnabled: true
@@ -44,6 +44,9 @@ Style/PercentLiteralDelimiters:
 
 # Metrics
 Metrics/ClassLength:
+  Enabled: false
+
+Metrics/ModuleLength:
   Enabled: false
 
 # Layout

@@ -11,7 +11,7 @@ Gem::Specification.new do |spec|
   spec.description = "A Ruby thread-, Ractor-, and fork-safe Snowflake ID generator with configurable machine ID and custom epoch support."
   spec.homepage = "https://github.com/luizkowalski/snowflaked"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.3"
+  spec.required_ruby_version = ">= 3.4"
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = spec.homepage
