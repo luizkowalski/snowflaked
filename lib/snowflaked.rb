@@ -98,7 +98,8 @@ module Snowflaked
 
   class << self
     # Call .configure, or generate the first ID, on the main Ractor.
-    # Do this before you start any other Ractor.
+    # Do this before you start any other Ractor. Each Ractor then owns a
+    # sequence slot and generates IDs without any cross-Ractor messages.
     # The Configuration object must stay mutable. You can set machine_id
     # and epoch. The code also sets a new machine_id after each fork.
     # For this reason, audition cannot show that this object is safe to
@@ -152,6 +153,8 @@ module Snowflaked
 
     def ensure_initialized!
       return if Generator.initialized?
+
+      raise Error, "Snowflaked must be initialized on the main Ractor: call Snowflaked.configure, or generate one ID, before you start any Ractor" unless Ractor.main?
 
       config = configuration
       config.seal!

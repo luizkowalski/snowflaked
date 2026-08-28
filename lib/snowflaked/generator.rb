@@ -6,14 +6,34 @@ module Snowflaked
     MAX_UNSIGNED_ID = (1 << 64) - 1
     MACHINE_MASK    = 0x3ff
     SEQUENCE_MASK   = 0xfff
-    INITIALIZATION_LOCK = Mutex.new
+
+    # The 12 sequence bits are split: a high slot owned by one Ractor, and a
+    # low counter that Ractor advances alone. Two Ractors therefore never
+    # compose the same ID, so nothing has to be coordinated per ID.
+    #
+    # SLOT_BITS trades Ractor count against per-Ractor rate, and nothing else:
+    # 2 bits gives 4 Ractors at 1,024 IDs/ms each, 3 gives 8 at 512, 4 gives
+    # 16 at 256. Any of them costs about 540ns per ID. Set it with the
+    # SNOWFLAKED_SLOT_BITS environment variable before boot; 0 gives a
+    # process that never generates in a non-main Ractor the full 4,096/ms.
+    SLOT_BITS = Integer(ENV.fetch("SNOWFLAKED_SLOT_BITS", "3")).tap do |bits|
+      raise ArgumentError, "SNOWFLAKED_SLOT_BITS must be between 0 and 10, got #{bits}" unless bits.between?(0, 10)
+    end
+    SLOT_COUNT    = 1 << SLOT_BITS
+    SEQUENCE_BITS = 12 - SLOT_BITS
+    MAX_SEQUENCE  = (1 << SEQUENCE_BITS) - 1
 
     class State
-      def initialize(machine_id, epoch_ms)
+      def initialize(machine_id, epoch_ms, slot)
         @machine_id = machine_id
         @epoch_ms = epoch_ms
-        @timestamp = -1
-        @sequence = 0
+        @slot = slot << SEQUENCE_BITS
+        # This slot may have belonged to a Ractor that died moments ago (or,
+        # after a fork, to the parent process). Its counter is unknown, so
+        # refuse to issue anything in the construction millisecond: the first
+        # ID waits for the next one, which no previous holder can have used.
+        @timestamp = current_timestamp
+        @sequence = MAX_SEQUENCE
       end
 
       def generate
@@ -21,7 +41,7 @@ module Snowflaked
         return if timestamp < @timestamp
 
         sequence = timestamp == @timestamp ? @sequence + 1 : 0
-        timestamp = next_timestamp if sequence > SEQUENCE_MASK
+        timestamp = next_timestamp if sequence > MAX_SEQUENCE
         return unless timestamp
 
         @sequence = timestamp > @timestamp ? 0 : sequence
@@ -45,7 +65,41 @@ module Snowflaked
       end
 
       def compose(timestamp, sequence)
-        ((timestamp << 22) & MAX_SIGNED_ID) | (@machine_id << 12) | sequence
+        ((timestamp << 22) & MAX_SIGNED_ID) | (@machine_id << 12) | @slot | sequence
+      end
+    end
+
+    # Runs inside the slot server Ractor. Lends every other Ractor a slot for
+    # as long as it lives, and takes the slot back when it exits. The one
+    # blocking select serves requests and exits alike, so the server costs
+    # nothing while it waits.
+    class SlotPool
+      def initialize(count)
+        @free = (1...count).to_a
+        @leases = {} # a monitor port per live lease => the slot it holds
+      end
+
+      def run
+        loop do
+          port, message = Ractor.select(Ractor.current.default_port, *@leases.keys)
+          released = @leases.delete(port)
+
+          released ? @free << released : lease(*message)
+        end
+      end
+
+      private
+
+      def lease(requester, reply)
+        slot = @free.shift
+
+        if slot
+          deaths = Ractor::Port.new
+          requester.monitor(deaths)
+          @leases[deaths] = slot
+        end
+
+        reply.send(slot)
       end
     end
 
@@ -53,18 +107,21 @@ module Snowflaked
       def init(machine_id, epoch_ms)
         epoch_ms = checked_epoch(epoch_ms)
 
-        INITIALIZATION_LOCK.synchronize do
+        Ractor.store_if_absent(:snowflaked_init_lock) { Mutex.new }.synchronize do
           return false if initialized?
 
-          @epoch_ms = epoch_ms
-          @server = start_server(machine_id)
-          @pid = Process.pid
+          # Written once, on the main Ractor, before any other Ractor starts.
+          # Every value is shareable, so other Ractors can read them.
+          @machine_id = machine_id # audition:disable class-level-state
+          @epoch_ms = epoch_ms # audition:disable class-level-state
+          @slots = start_slot_server # audition:disable class-level-state
+          @pid = Process.pid # audition:disable class-level-state
           true
         end
       end
 
       def generate
-        result = response
+        result = state_lock.synchronize { local_state.generate }
 
         return result if result
 
@@ -99,47 +156,60 @@ module Snowflaked
 
       private
 
-      def start_server(machine_id)
-        Ractor.new(machine_id, @epoch_ms) do |id, epoch|
-          state = State.new(id, epoch)
-
-          loop do
-            reply = Ractor.receive
-            reply.send(state.generate)
-          end
-        end
+      # Threads share their Ractor's State, so they still serialize; Ractors
+      # do not, because each one holds a State on a slot of its own.
+      def state_lock
+        Ractor.store_if_absent(:snowflaked_state_lock) { Mutex.new }
       end
 
-      def response
-        return port_response if defined?(Ractor::Port)
-
-        legacy_response
-      end
-
-      def port_response
-        reply = Ractor::Port.new
-        @server.send(reply)
-        reply.receive
-      end
-
-      def legacy_response
-        lock = Ractor.store_if_absent(:snowflaked_generator_reply_lock) { Mutex.new }
-        lock.synchronize do
-          reply = legacy_reply
-          @server.send(reply)
-          reply.take
-        end
-      end
-
-      def legacy_reply
-        cache = Ractor.current[:snowflaked_generator_reply]
+      def local_state
+        cache = Ractor.current[:snowflaked_state]
         return cache.last if cache&.first == Process.pid
 
-        reply = Ractor.new do
-          loop { Ractor.yield(Ractor.receive) }
-        end
-        Ractor.current[:snowflaked_generator_reply] = [Process.pid, reply]
-        reply
+        state = State.new(@machine_id, @epoch_ms, claim_slot)
+        Ractor.current[:snowflaked_state] = [Process.pid, state]
+        state
+      end
+
+      # The main Ractor always owns slot 0, so a program that never starts a
+      # Ractor never talks to the slot server at all.
+      def claim_slot
+        return 0 if Ractor.main?
+
+        raise Snowflaked::Error, "Snowflaked: generating IDs outside the main Ractor needs Ruby 4.0 or later" unless @slots
+
+        slot = request_slot
+        return slot if slot
+
+        raise Snowflaked::Error,
+              "Snowflaked: #{SLOT_COUNT} Ractors already hold a sequence slot; " \
+              "set the SNOWFLAKED_SLOT_BITS environment variable to trade per-Ractor throughput for more Ractors"
+      end
+
+      def request_slot
+        port = Ractor::Port.new
+        @slots.monitor(port) # a dead server delivers :exited here instead of leaving us blocked forever
+        @slots.send([Ractor.current, port])
+        slot = port.receive
+        @slots.unmonitor(port)
+        raise Snowflaked::Error, "Snowflaked: the slot server Ractor died; cannot claim a sequence slot" if slot == :exited
+
+        slot
+      rescue Ractor::ClosedError
+        raise Snowflaked::Error, "Snowflaked: the slot server Ractor died; cannot claim a sequence slot"
+      end
+
+      # The server is an implementation detail, so its Ractor.new should not
+      # put "Ractor API is experimental" in every Rails boot log. The first
+      # Ractor the application itself starts still warns.
+      def start_slot_server
+        return unless defined?(Ractor::Port)
+
+        previous = Warning[:experimental]
+        Warning[:experimental] = false
+        Ractor.new(SLOT_COUNT) { |count| SlotPool.new(count).run }
+      ensure
+        Warning[:experimental] = previous unless previous.nil?
       end
 
       def checked_epoch(epoch_ms)

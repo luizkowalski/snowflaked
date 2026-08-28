@@ -3,6 +3,10 @@
 require_relative "test_helper"
 
 class TestGenerator < ActiveSupport::TestCase
+  SLOTS    = Snowflaked::Generator::SLOT_COUNT
+  SEQ_BITS = Snowflaked::Generator::SEQUENCE_BITS
+  PER_MS   = Snowflaked::Generator::MAX_SEQUENCE + 1
+
   def test_parses_expected_components
     id = 862_026_798_833_074_178
 
@@ -68,37 +72,34 @@ class TestGenerator < ActiveSupport::TestCase
   end
 
   def test_waits_for_next_millisecond_after_sequence_exhaustion
-    times = ([2_000] * 4_097) + [2_001]
-    state = state_with_timestamps(*times)
+    state = exhausted_state(2_001)
 
-    ids = Array.new(4_097) { state.generate }
+    ids = Array.new(PER_MS + 1) { state.generate }
 
-    assert_equal 4_095, ids[-2] & 0xfff
+    assert_equal PER_MS - 1, ids[-2] & 0xfff
     assert_equal 0, ids[-1] & 0xfff
     assert_equal 1_001, ids[-1] >> 22
   end
 
   def test_recovers_after_clock_rolls_back_while_waiting_for_sequence_rollover
-    times = ([2_000] * 4_097) + [1_999, 2_001]
-    state = state_with_timestamps(*times)
-    4_096.times { state.generate }
+    state = exhausted_state(1_999, 2_001)
+    PER_MS.times { state.generate }
 
     assert_nil state.generate
     assert_equal 1_001, state.generate >> 22
   end
 
   def test_preserves_rollover_after_rollback_until_a_later_timestamp
-    times = ([2_000] * 4_097) + [1_999, 2_000, 2_001]
-    state = state_with_timestamps(*times)
-    ids = Array.new(4_096) { state.generate }
+    state = exhausted_state(1_999, 2_000, 2_001)
+    ids = Array.new(PER_MS) { state.generate }
 
     assert_nil state.generate
 
-    rollover_id = state.generate
+    rollover = state.generate
 
-    assert_equal 4_097, (ids + [rollover_id]).uniq.size
-    assert_equal 0, rollover_id & 0xfff
-    assert_equal 1_001, rollover_id >> 22
+    assert_equal PER_MS + 1, (ids << rollover).uniq.size
+    assert_equal 0, rollover & 0xfff
+    assert_equal 1_001, rollover >> 22
   end
 
   def test_rejects_epoch_milliseconds_outside_unsigned_64_bit_range
@@ -111,6 +112,26 @@ class TestGenerator < ActiveSupport::TestCase
     assert_predicate generator_init_status(nil, expected_epoch_ms: 0), :success?
   end
 
+  def test_slots_occupy_the_high_sequence_bits_and_never_collide
+    states = Array.new(SLOTS) { |slot| state_with_timestamps(2_000, 2_000, slot: slot) }
+    ids = states.flat_map { |state| [state.generate, state.generate] }
+
+    assert_equal ids.size, ids.uniq.size
+    assert_equal (0...SLOTS).to_a, ids.map { |id| (id & 0xfff) >> SEQ_BITS }.uniq.sort
+  end
+
+  def test_first_id_waits_out_the_construction_millisecond
+    state = Snowflaked::Generator::State.new(42, 1_000, 0)
+    floor = state.instance_variable_get(:@timestamp)
+    clock = [floor, floor, floor + 1].each
+    state.define_singleton_method(:current_timestamp) { clock.next }
+
+    id = state.generate
+
+    assert_equal floor + 1, id >> 22, "A fresh State must not issue IDs in the millisecond it claimed its slot"
+    assert_equal 0, id & 0xfff & Snowflaked::Generator::MAX_SEQUENCE
+  end
+
   def test_returns_nil_when_clock_moves_backwards
     state = state_with_timestamps(2_000, 1_999, 2_001)
     state.generate
@@ -121,10 +142,19 @@ class TestGenerator < ActiveSupport::TestCase
 
   private
 
-  def state_with_timestamps(*timestamps)
+  # A state whose clock stalls just long enough to exhaust one millisecond.
+  def exhausted_state(*after)
+    state_with_timestamps(*([2_000] * (PER_MS + 1)), *after)
+  end
+
+  # Rewinds the construction-millisecond floor so each test drives the clock
+  # from a blank state; the floor itself is covered by its own test above.
+  def state_with_timestamps(*timestamps, slot: 0)
     timestamps = timestamps.each
-    Snowflaked::Generator::State.new(42, 1_000).tap do |state|
+    Snowflaked::Generator::State.new(42, 1_000, slot).tap do |state|
       state.define_singleton_method(:current_timestamp) { timestamps.next - @epoch_ms }
+      state.instance_variable_set(:@timestamp, -1)
+      state.instance_variable_set(:@sequence, 0)
     end
   end
 
