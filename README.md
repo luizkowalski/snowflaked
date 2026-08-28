@@ -5,7 +5,7 @@
 [![Downloads](https://img.shields.io/gem/dt/snowflaked.svg)](https://rubygems.org/gems/snowflaked)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.txt)
 
-A database-agnostic, high-performance, thread-safe Snowflake ID generator for Ruby, powered by Rust.
+A database-agnostic, high-performance, thread-safe Snowflake ID generator for Ruby.
 
 Snowflake IDs are 64-bit unique identifiers that encode a timestamp, machine ID, and sequence number. They're time-sortable (IDs created later are always larger), making them ideal for distributed systems where you need unique IDs without coordination between machines. Unlike UUIDs, Snowflake IDs are smaller, sortable, and index-friendly for databases.
 
@@ -166,20 +166,13 @@ tl;dr: Snowflake IDs have a negligible performance impact compared to database-b
 ## Requirements
 
 - Ruby >= 3.3
-- rustc / cargo >= 1.81.0 (development uses the toolchain pinned in `mise.toml`)
-- Mise
 
 ## Development
 
 ```bash
-mise install
 bundle install
 bundle exec rake
 ```
-
-## Acknowledgments
-
-- [snowflaked-rs](https://github.com/MrGunflame/snowflaked-rs) - the Rust implementation of Snowflake IDs
 
 ## License
 

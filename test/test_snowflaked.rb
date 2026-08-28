@@ -84,6 +84,41 @@ class TestSnowflaked < ActiveSupport::TestCase
     assert_equal 1000, all_ids.uniq.size, "Generated duplicate IDs across threads"
   end
 
+  def test_ractor_safety
+    Snowflaked.id
+    ractors = Array.new(4) do
+      Ractor.new { Array.new(250) { Snowflaked.id } }
+    end
+    ids = ractors.flat_map { |ractor| ractor.respond_to?(:value) ? ractor.value : ractor.take }
+
+    assert_equal 1_000, ids.uniq.size
+  end
+
+  def test_legacy_ractor_protocol_pairs_requests
+    skip "Ractor::Port is available" if defined?(Ractor::Port)
+
+    Snowflaked.id
+    ractors = Array.new(4) do
+      Ractor.new { Array.new(250) { Snowflaked.id } }
+    end
+    ids = ractors.flat_map(&:take)
+
+    assert_equal 1_000, ids.uniq.size
+  end
+
+  def test_legacy_ractor_protocol_pairs_responses
+    return skip "Ractor::Port is available" if defined?(Ractor::Port)
+
+    with_legacy_ractor_server { |server| assert_legacy_ractor_responses(server) }
+  end
+
+  def test_parses_expected_ids
+    assert_equal({ timestamp_ms: 1_777_972_460_091, machine_id: 0, sequence: 5 },
+                 Snowflaked.parse(442_252_698_964_721_669))
+    assert_equal({ timestamp_ms: 1_878_054_404_525, machine_id: 256, sequence: 2 },
+                 Snowflaked.parse(862_026_798_833_074_178))
+  end
+
   def test_timestamp_preserves_millisecond_precision
     id = Snowflaked.id
     time_ms = Snowflaked.timestamp_ms(id)
@@ -137,6 +172,15 @@ class TestSnowflaked < ActiveSupport::TestCase
 
     assert_not_equal parent_machine_id, child_machine_id, "Child should reinitialize with different machine_id after fork"
     assert_equal 200, (parent_ids + child_ids).uniq.size, "Generated duplicate IDs across forked processes"
+  end
+
+  def test_ractor_safety_after_fork
+    Snowflaked.id
+
+    child_ids, child_machine_id = fork_and_collect { ractor_ids_after_fork }
+
+    assert_equal 400, child_ids.uniq.size
+    assert(child_ids.all? { |id| Snowflaked.machine_id(id) == child_machine_id })
   end
 
   def test_fork_safety_with_background_thread # rubocop:disable Metrics/MethodLength,Metrics/AbcSize
@@ -305,6 +349,48 @@ class TestSnowflaked < ActiveSupport::TestCase
   end
 
   private
+
+  def with_legacy_ractor_server
+    server = Snowflaked::Generator.instance_variable_get(:@server)
+    fake_server = legacy_ractor_server
+    Snowflaked::Generator.instance_variable_set(:@server, fake_server)
+
+    yield fake_server
+  ensure
+    Snowflaked::Generator.instance_variable_set(:@server, server) if server
+  end
+
+  def legacy_ractor_server
+    Ractor.new do
+      send_reply = ->(reply, result) { reply.is_a?(Ractor) ? reply.send(result) : reply.first.send([reply.last, result]) }
+      first_reply = Ractor.receive
+      Ractor.yield(:first_request)
+      second_reply = Ractor.receive
+      isolated = first_reply.is_a?(Ractor) && second_reply.is_a?(Ractor) && first_reply != second_reply
+      Ractor.yield(isolated)
+      send_reply.call(second_reply, :second)
+      send_reply.call(first_reply, :first)
+    end
+  end
+
+  def assert_legacy_ractor_responses(server)
+    first = Ractor.new { Snowflaked::Generator.generate }
+
+    assert_equal :first_request, server.take
+    second = Ractor.new { Snowflaked::Generator.generate }
+
+    assert server.take, "Each request must use an isolated reply Ractor"
+    assert_equal :first, first.take
+    assert_equal :second, second.take
+  end
+
+  def ractor_ids_after_fork
+    child_machine_id = Snowflaked.configuration.machine_id_value
+    Snowflaked.id
+    ractors = Array.new(4) { Ractor.new { Array.new(100) { Snowflaked.id } } }
+    ids = ractors.flat_map { |ractor| ractor.respond_to?(:value) ? ractor.value : ractor.take }
+    [ids, child_machine_id]
+  end
 
   def configuration_with_stale_machine_id(old_pid)
     Snowflaked::Configuration.new.tap do |config|

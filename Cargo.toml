@@ -1,6 +1,0 @@
-[workspace]
-members = ["./ext/snowflaked"]
-resolver = "2"
-
-[profile.release]
-strip = "none"

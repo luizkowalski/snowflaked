@@ -1,14 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "snowflaked/version"
-
-# Load precompiled extension for the current Ruby version
-begin
-  ruby_version = /(\d+\.\d+)/.match(RUBY_VERSION)
-  require "snowflaked/#{ruby_version}/snowflaked"
-rescue LoadError
-  require "snowflaked/snowflaked"
-end
+require_relative "snowflaked/generator"
 
 require "socket"
 
@@ -123,17 +116,17 @@ module Snowflaked
 
     def id
       ensure_initialized!
-      Native.generate
+      Generator.generate
     end
 
     def parse(id)
       ensure_initialized!
-      Native.parse(id)
+      Generator.parse(id)
     end
 
     def timestamp(id)
       ensure_initialized!
-      seconds, milliseconds = Native.timestamp_ms(id).divmod(1000)
+      seconds, milliseconds = Generator.timestamp_ms(id).divmod(1000)
 
       if defined?(Time.zone) && Time.zone
         Time.zone.at(seconds, milliseconds * 1000, :usec)
@@ -143,28 +136,27 @@ module Snowflaked
     end
 
     def machine_id(id) # rubocop:disable Rails/Delegate
-      Native.machine_id(id)
+      Generator.machine_id(id)
     end
 
     def timestamp_ms(id)
       ensure_initialized!
-      Native.timestamp_ms(id)
+      Generator.timestamp_ms(id)
     end
 
     def sequence(id) # rubocop:disable Rails/Delegate
-      Native.sequence(id)
+      Generator.sequence(id)
     end
 
     private
 
     def ensure_initialized!
-      return if @native_initialized_pid == Process.pid
+      return if Generator.initialized?
 
       config = configuration
       config.seal!
 
-      Native.init_generator(config.machine_id_value, config.epoch_ms)
-      @native_initialized_pid = Ractor.make_shareable(Process.pid) rescue Process.pid # rubocop:disable Style/RescueModifier
+      Generator.init(config.machine_id_value, config.epoch_ms)
     end
   end
 end

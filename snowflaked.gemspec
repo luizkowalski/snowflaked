@@ -7,8 +7,8 @@ Gem::Specification.new do |spec|
   spec.version = Snowflaked::VERSION
   spec.authors = ["Luiz Eduardo Kowalski"]
 
-  spec.summary = "Fast Snowflake ID generator with Rust backend"
-  spec.description = "A Ruby gem for generating Twitter Snowflake IDs using a high-performance Rust backend. Thread-safe with configurable machine ID and custom epoch support."
+  spec.summary = "Ruby Snowflake ID generator"
+  spec.description = "A Ruby thread-, Ractor-, and fork-safe Snowflake ID generator with configurable machine ID and custom epoch support."
   spec.homepage = "https://github.com/luizkowalski/snowflaked"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.3"
@@ -21,15 +21,10 @@ Gem::Specification.new do |spec|
 
   spec.files = Dir[
     "lib/**/*",
-    "ext/**/*",
-    "Cargo.toml",
-    "Cargo.lock",
     "LICENSE.txt",
     "README.md"
   ]
   spec.require_paths = ["lib"]
-  spec.extensions = ["ext/snowflaked/extconf.rb"]
 
   spec.add_dependency "railties", ">= 8.0"
-  spec.add_dependency "rb_sys", "~> 0.9"
 end
