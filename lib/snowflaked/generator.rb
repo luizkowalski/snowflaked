@@ -166,8 +166,8 @@ module Snowflaked
       end
 
       def local_state
-        cache = Ractor.current[:snowflaked_state]
-        return cache.last if cache&.first == Process.pid
+        pid, state = Ractor.current[:snowflaked_state]
+        return state if pid == Process.pid
 
         state = State.new(@machine_id, @epoch_ms, claim_slot)
         Ractor.current[:snowflaked_state] = [Process.pid, state]
