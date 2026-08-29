@@ -9,7 +9,6 @@ gem "irb"
 gem "rake"
 
 gem "minitest"
-gem "rake-compiler"
 
 gem "activerecord", ">= 7.0"
 gem "pg"

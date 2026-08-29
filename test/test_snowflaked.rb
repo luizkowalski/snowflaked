@@ -84,6 +84,78 @@ class TestSnowflaked < ActiveSupport::TestCase
     assert_equal 1000, all_ids.uniq.size, "Generated duplicate IDs across threads"
   end
 
+  def test_ractor_safety
+    skip "Ractor ID generation needs Ruby 4.0" unless defined?(Ractor::Port)
+    Snowflaked.id
+    ractors = Array.new(4) do
+      Ractor.new { Array.new(250) { Snowflaked.id } }
+    end
+    ids = ractors.flat_map { |ractor| ractor.respond_to?(:value) ? ractor.value : ractor.take }
+
+    assert_equal 1_000, ids.uniq.size
+  end
+
+  def test_every_ractor_claims_a_distinct_slot
+    skip "Ractor ID generation needs Ruby 4.0" unless defined?(Ractor::Port)
+
+    with_full_slot_pool do |ids|
+      slots = ids.map { |id| Snowflaked.sequence(id) >> Snowflaked::Generator::SEQUENCE_BITS }
+
+      assert_equal (1...Snowflaked::Generator::SLOT_COUNT).to_a, slots.uniq.sort
+      assert_equal ids.size, ids.uniq.size
+    end
+  end
+
+  def test_a_recycled_slot_never_repeats_an_id
+    skip "Ractor ID generation needs Ruby 4.0" unless defined?(Ractor::Port)
+
+    Snowflaked.id
+    ids = Array.new(150) { Ractor.new { Snowflaked.id }.value }
+
+    assert_equal ids.size, ids.uniq.size, "A slot reclaimed from a dead Ractor must not reissue its IDs"
+  end
+
+  def test_generating_before_main_ractor_initializes_raises_a_clear_error
+    status = fork_and_status do
+      ractor = Ractor.new { Snowflaked.id }
+      ractor.respond_to?(:value) ? ractor.value : ractor.take
+    rescue Ractor::RemoteError => e
+      exit!(e.cause.is_a?(Snowflaked::Error) && e.cause.message.include?("main Ractor") ? 0 : 1)
+    end
+
+    assert_predicate status, :success?, "First call from a non-main Ractor must raise Snowflaked::Error, not Ractor::IsolationError"
+  end
+
+  def test_slot_exhaustion_raises_instead_of_reusing_a_slot
+    skip "Ractor ID generation needs Ruby 4.0" unless defined?(Ractor::Port)
+
+    status = fork_and_status do
+      with_full_slot_pool { Ractor.new { Snowflaked.id }.value }
+      exit!(1)
+    rescue Ractor::RemoteError => e
+      exit!(e.cause.message.include?("sequence slot") ? 0 : 1)
+    end
+
+    assert_predicate status, :success?, "A Ractor beyond the pool must raise rather than share a slot"
+  end
+
+  def test_a_slot_returns_to_the_pool_when_its_ractor_exits
+    skip "Ractor ID generation needs Ruby 4.0" unless defined?(Ractor::Port)
+
+    with_full_slot_pool do |_ids, holders|
+      release(holders.first)
+
+      assert_kind_of Integer, Ractor.new { Snowflaked.id }.value
+    end
+  end
+
+  def test_parses_expected_ids
+    assert_equal({ timestamp_ms: 1_777_972_460_091, machine_id: 0, sequence: 5 },
+                 Snowflaked.parse(442_252_698_964_721_669))
+    assert_equal({ timestamp_ms: 1_878_054_404_525, machine_id: 256, sequence: 2 },
+                 Snowflaked.parse(862_026_798_833_074_178))
+  end
+
   def test_timestamp_preserves_millisecond_precision
     id = Snowflaked.id
     time_ms = Snowflaked.timestamp_ms(id)
@@ -137,6 +209,16 @@ class TestSnowflaked < ActiveSupport::TestCase
 
     assert_not_equal parent_machine_id, child_machine_id, "Child should reinitialize with different machine_id after fork"
     assert_equal 200, (parent_ids + child_ids).uniq.size, "Generated duplicate IDs across forked processes"
+  end
+
+  def test_ractor_safety_after_fork
+    skip "Ractor ID generation needs Ruby 4.0" unless defined?(Ractor::Port)
+    Snowflaked.id
+
+    child_ids, child_machine_id = fork_and_collect { ractor_ids_after_fork }
+
+    assert_equal 400, child_ids.uniq.size
+    assert(child_ids.all? { |id| Snowflaked.machine_id(id) == child_machine_id })
   end
 
   def test_fork_safety_with_background_thread # rubocop:disable Metrics/MethodLength,Metrics/AbcSize
@@ -305,6 +387,48 @@ class TestSnowflaked < ActiveSupport::TestCase
   end
 
   private
+
+  # Holds every slot with a live Ractor for the duration of the block, then
+  # gives them all back so later tests still find an empty pool.
+  def with_full_slot_pool
+    Snowflaked.id # the main Ractor takes slot 0
+    ack = Ractor::Port.new
+    holders = Array.new(Snowflaked::Generator::SLOT_COUNT - 1) do
+      Ractor.new(ack) { |port| port.send(Snowflaked.id) while Ractor.receive != :quit }
+    end
+    holders.each { |holder| holder.send(:id) }
+
+    yield holders.map { ack.receive }, holders
+  ensure
+    holders&.each { |holder| release(holder) }
+  end
+
+  def release(holder)
+    holder.send(:quit)
+    holder.value
+  rescue Ractor::ClosedError, Ractor::RemoteError
+    nil
+  end
+
+  # Slots and initialization are per-process and one-shot, so each of these
+  # assertions needs a process that has not generated an ID yet.
+  def fork_and_status
+    pid = fork do
+      Thread.report_on_exception = false # these children raise on purpose
+      yield
+      exit!(0)
+    end
+
+    Process.wait2(pid).last
+  end
+
+  def ractor_ids_after_fork
+    child_machine_id = Snowflaked.configuration.machine_id_value
+    Snowflaked.id
+    ractors = Array.new(4) { Ractor.new { Array.new(100) { Snowflaked.id } } }
+    ids = ractors.flat_map { |ractor| ractor.respond_to?(:value) ? ractor.value : ractor.take }
+    [ids, child_machine_id]
+  end
 
   def configuration_with_stale_machine_id(old_pid)
     Snowflaked::Configuration.new.tap do |config|

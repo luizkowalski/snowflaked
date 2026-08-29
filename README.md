@@ -5,7 +5,7 @@
 [![Downloads](https://img.shields.io/gem/dt/snowflaked.svg)](https://rubygems.org/gems/snowflaked)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.txt)
 
-A database-agnostic, high-performance, thread-safe Snowflake ID generator for Ruby, powered by Rust.
+A database-agnostic, high-performance, thread-, Ractor-, and fork-safe Snowflake ID generator for Ruby.
 
 Snowflake IDs are 64-bit unique identifiers that encode a timestamp, machine ID, and sequence number. They're time-sortable (IDs created later are always larger), making them ideal for distributed systems where you need unique IDs without coordination between machines. Unlike UUIDs, Snowflake IDs are smaller, sortable, and index-friendly for databases.
 
@@ -134,7 +134,23 @@ Snowflake IDs require a monotonically increasing clock. If the system clock step
 
 This gem works inside a Ruby Ractor. CI runs the [`audition`](https://github.com/yaroslav/audition) gem on every change, to check this.
 
-One rule applies. Call `Snowflaked.configure`, or generate the first ID, on the main Ractor. Do this before you start any other Ractor. `Snowflaked::Configuration` must stay open to change: it re-derives `machine_id` after each fork. For this reason, only the main Ractor can set it up safely, and every other Ractor must find it already set up.
+Each Ractor owns one slot of the 12 sequence bits and counts inside that slot alone, so no two Ractors ever compose the same ID and no message is sent while an ID is generated. The main Ractor always owns slot 0. Every other Ractor asks a small server Ractor for a slot the first time it generates an ID, and the server takes the slot back when that Ractor exits.
+
+The `SNOWFLAKED_SLOT_BITS` environment variable sets how the 12 bits are split. Set it before the process boots. It trades Ractor count against per-Ractor rate, and nothing else:
+
+| `SNOWFLAKED_SLOT_BITS` | Ractors | IDs per Ractor per ms |
+| ---------------------- | ------- | --------------------- |
+| 0                      | main only | 4,096               |
+| 2                      | 4       | 1,024                 |
+| 3 (default)            | 8       | 512                   |
+| 4                      | 16      | 256                   |
+
+A Ractor that asks for a slot when all of them are held raises `Snowflaked::Error`. Raise `SNOWFLAKED_SLOT_BITS` if you run more Ractors than the default allows. A deployment that never generates IDs outside the main Ractor — a plain Puma server, for example — can set `0` to get the full 4,096 IDs per millisecond per process.
+
+Two rules apply:
+
+- Call `Snowflaked.configure`, or generate the first ID, on the main Ractor, before you start any other Ractor. `Snowflaked::Configuration` must stay open to change: it re-derives `machine_id` after each fork. For this reason, only the main Ractor can set it up safely, and every other Ractor must find it already set up.
+- Generating IDs inside a non-main Ractor needs Ruby 4.0 or later, which is where `Ractor::Port` and `Ractor#monitor` are available. On Ruby 3.4, the main Ractor and its threads work as usual.
 
 ## API Reference
 
@@ -165,21 +181,14 @@ tl;dr: Snowflake IDs have a negligible performance impact compared to database-b
 
 ## Requirements
 
-- Ruby >= 3.3
-- rustc / cargo >= 1.81.0 (development uses the toolchain pinned in `mise.toml`)
-- Mise
+- Ruby >= 3.4 (generating IDs inside a non-main Ractor needs Ruby 4.0)
 
 ## Development
 
 ```bash
-mise install
 bundle install
 bundle exec rake
 ```
-
-## Acknowledgments
-
-- [snowflaked-rs](https://github.com/MrGunflame/snowflaked-rs) - the Rust implementation of Snowflake IDs
 
 ## License
 

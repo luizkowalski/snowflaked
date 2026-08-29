@@ -14,7 +14,6 @@ gem "pg"
 gem "rails", "~> 8.1"
 gem "railties", ">= 7.0"
 gem "rake"
-gem "rake-compiler"
 gem "rubocop", require: false
 gem "rubocop-md", require: false
 gem "rubocop-minitest", require: false
