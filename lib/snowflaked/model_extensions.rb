@@ -21,7 +21,7 @@ module Snowflaked
         attrs = attributes.map(&:to_sym)
         attrs |= [:id] if id
         self._snowflake_attributes = attrs.freeze
-        @_snowflake_attributes_with_columns = nil
+        @_snowflake_attributes_with_columns = nil # audition:disable class-level-state
       end
 
       def _snowflake_columns_from_comments
@@ -29,13 +29,13 @@ module Snowflaked
 
         return [] unless table_exists?
 
-        @_snowflake_columns_from_comments = columns.filter_map { |col| col.name.to_sym if col.comment == Snowflaked::SchemaDefinitions::COMMENT }
+        @_snowflake_columns_from_comments = columns.filter_map { |col| col.name.to_sym if col.comment == Snowflaked::SchemaDefinitions::COMMENT } # audition:disable class-level-state
       end
 
       def _snowflake_attributes_with_columns
         return _snowflake_attributes unless table_exists?
 
-        @_snowflake_attributes_with_columns ||= (_snowflake_attributes | _snowflake_columns_from_comments)
+        @_snowflake_attributes_with_columns ||= (_snowflake_attributes | _snowflake_columns_from_comments) # audition:disable class-level-state
       end
     end
 
