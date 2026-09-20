@@ -4,6 +4,8 @@ require_relative "test_helper"
 require "timeout"
 
 class TestSnowflaked < ActiveSupport::TestCase
+  include ForkHelpers
+
   def test_generates_unique_ids
     ids = Array.new(1000) { Snowflaked.id }
 
@@ -75,7 +77,7 @@ class TestSnowflaked < ActiveSupport::TestCase
 
   def test_thread_safety
     threads = Array.new(10) do
-      Thread.new { Array.new(100) { Snowflaked.id } } # -- Intentional
+      Thread.new { Array.new(100) { Snowflaked.id } }
     end
 
     all_ids = threads.flat_map(&:value)
@@ -311,27 +313,5 @@ class TestSnowflaked < ActiveSupport::TestCase
       config.instance_variable_set(:@machine_id_value, 123)
       config.instance_variable_set(:@machine_id_value_pid, old_pid)
     end
-  end
-
-  def fork_and_collect(&block)
-    IO.pipe do |read_io, write_io|
-      pid = fork { write_child_payload(read_io, write_io, block) }
-      write_io.close
-      parse_child_payload(read_io.read, pid)
-    end
-  end
-
-  def write_child_payload(read_io, write_io, block)
-    read_io.close
-    write_io.puts(JSON.dump(block.call))
-    exit!(0)
-  end
-
-  def parse_child_payload(payload, pid)
-    _, status = Process.wait2(pid)
-
-    assert_predicate status, :success?, "forked child exited unsuccessfully"
-
-    JSON.parse(payload)
   end
 end

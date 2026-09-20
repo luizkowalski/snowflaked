@@ -376,6 +376,7 @@ version = "0.3.0"
 dependencies = [
  "arc-swap",
  "magnus",
+ "rb-sys",
  "snowflaked 1.0.3",
 ]
 

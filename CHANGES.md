@@ -2,6 +2,7 @@
 
 ## main
 
+- fix: mark the native extension Ractor-safe (`rb_ext_ractor_safe`), so `Snowflaked.id` and the other readers work from a non-main Ractor instead of raising `Ractor::UnsafeError`. Set up the gem on the main Ractor first, as documented
 - fix: generate IDs in `before_create` instead of `before_validation`, so `save(validate: false)` gets IDs; `insert_all`/`upsert_all` still skip generation (documented). IDs are no longer available during validations
 - fix: validate that `epoch` is a time-like value in the past; `epoch = nil` (Unix epoch) remains supported
 - fix: silence the Rust panic output for the expected clock-backwards panic; it is still raised as a `RuntimeError`

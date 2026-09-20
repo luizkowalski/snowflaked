@@ -1,0 +1,7 @@
+{
+  "class-level-state|lib/snowflaked.rb": 1,
+  "native-extension|lib/snowflaked/snowflaked.bundle": 1,
+  "native-gem-calls|lib/snowflaked.rb": 11,
+  "native-gem-calls|lib/snowflaked/model_extensions.rb": 19,
+  "runtime-native-extension|/Users/luiz/.local/share/mise/installs/ruby/4.0.7/lib/ruby/gems/4.0.0/gems/snowflaked-0.3.0-arm64-darwin/lib/snowflaked/4.0/snowflaked.bundle": 1
+}

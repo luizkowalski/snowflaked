@@ -118,6 +118,10 @@ fn install_panic_hook() {
 
 #[magnus::init]
 fn init(ruby: &Ruby) -> Result<(), Error> {
+    unsafe {
+        rb_sys::rb_ext_ractor_safe(true);
+    }
+
     install_panic_hook();
 
     let module = ruby.define_module("Snowflaked")?;
