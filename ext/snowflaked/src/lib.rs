@@ -1,80 +1,89 @@
+//! Native half of the `snowflaked` gem, exposed to Ruby as `Snowflaked::Native`.
+//!
+//! One process-wide generator lives in [`STATE`], tagged with the pid that built
+//! it. After a fork the child sees a foreign pid and rebuilds on first use with
+//! whatever machine id Ruby resolves for it. Ruby owns configuration; this side
+//! only builds, reads, and parses.
+
+use std::any::Any;
+use std::panic;
+use std::process;
+use std::sync::Arc;
+use std::time::{Duration, UNIX_EPOCH};
+
 use arc_swap::ArcSwapOption;
 use magnus::{function, prelude::*, Error, RHash, Ruby};
 use snowflaked::sync::Generator;
 use snowflaked::{Builder, Snowflake};
-use std::sync::Arc;
-use std::time::UNIX_EPOCH;
 
-struct GeneratorState {
-    generator: Generator,
-    epoch_offset: u64,
-    init_pid: u32,
-}
+/// Panic messages `snowflaked` 1.0 raises when the clock steps backwards
+/// (`sync.rs` in `generate` and `time.rs` in `SystemTime::elapsed`).
+const CLOCK_PANIC_MESSAGES: [&str; 2] = ["Clock has moved backwards", "clock went backwards"];
 
 static STATE: ArcSwapOption<GeneratorState> = ArcSwapOption::const_empty();
 
-fn build_generator(machine_id: u16, epoch_offset: u64) -> Generator {
-    let epoch = UNIX_EPOCH + std::time::Duration::from_millis(epoch_offset);
-    Builder::new().instance(machine_id).epoch(epoch).build()
+struct GeneratorState {
+    generator: Generator,
+    epoch_ms: u64,
+    pid: u32,
 }
 
-fn ensure_state(machine_id: u16, epoch_offset: u64, current_pid: u32) -> (Arc<GeneratorState>, bool) {
-    if let Some(s) = &*STATE.load() {
-        if s.init_pid == current_pid {
-            return (Arc::clone(s), false);
-        }
+impl GeneratorState {
+    fn new(machine_id: u16, epoch_ms: u64, pid: u32) -> Self {
+        let epoch = UNIX_EPOCH + Duration::from_millis(epoch_ms);
+        let generator = Builder::new().instance(machine_id).epoch(epoch).build();
+
+        Self { generator, epoch_ms, pid }
     }
 
-    let new_state = Arc::new(GeneratorState {
-        generator: build_generator(machine_id, epoch_offset),
-        epoch_offset,
-        init_pid: current_pid,
-    });
+    fn owned_by(&self, pid: u32) -> bool {
+        self.pid == pid
+    }
 
-    STATE.rcu(|current| {
-        if let Some(c) = current {
-            if c.init_pid == current_pid {
-                return Arc::clone(c);
-            }
-        }
-        Arc::clone(&new_state)
-    });
+    fn timestamp_ms(&self, id: u64) -> u64 {
+        id.timestamp().saturating_add(self.epoch_ms)
+    }
+}
 
-    let state = STATE.load_full().expect("generator state should be initialized");
-    let swapped = Arc::ptr_eq(&state, &new_state);
-
-    (state, swapped)
+fn is_initialized() -> bool {
+    STATE.load().as_ref().is_some_and(|state| state.owned_by(process::id()))
 }
 
 fn init_generator(machine_id: u16, epoch_ms: Option<u64>) -> bool {
-    let (_, swapped) = ensure_state(machine_id, epoch_ms.unwrap_or(0), std::process::id());
-    swapped
+    if is_initialized() {
+        return false;
+    }
+
+    let pid = process::id();
+    let new_state = Arc::new(GeneratorState::new(machine_id, epoch_ms.unwrap_or(0), pid));
+
+    STATE.rcu(|current| match current {
+        Some(current) if current.owned_by(pid) => Arc::clone(current),
+        _ => Arc::clone(&new_state),
+    });
+
+    STATE.load().as_ref().is_some_and(|state| Arc::ptr_eq(state, &new_state))
 }
 
 fn current_state(ruby: &Ruby) -> Result<Arc<GeneratorState>, Error> {
     STATE
         .load_full()
-        .filter(|s| s.init_pid == std::process::id())
+        .filter(|state| state.owned_by(process::id()))
         .ok_or_else(|| Error::new(ruby.exception_runtime_error(), "Generator not initialized"))
 }
 
-fn generate(ruby: &Ruby) -> Result<u64, Error> {
+fn generate(ruby: &Ruby) -> Result<i64, Error> {
     let state = current_state(ruby)?;
 
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| state.generator.generate::<i64>()))
-        .map(|id| id as u64)
+    panic::catch_unwind(|| state.generator.generate::<i64>())
         .map_err(|_| Error::new(ruby.exception_runtime_error(), "Snowflaked: system clock moved backwards; cannot generate a monotonic ID"))
 }
 
-fn epoch_offset(ruby: &Ruby) -> Result<u64, Error> {
-    current_state(ruby).map(|s| s.epoch_offset)
-}
-
 fn parse(ruby: &Ruby, id: u64) -> Result<RHash, Error> {
-    let offset = epoch_offset(ruby)?;
+    let state = current_state(ruby)?;
     let hash = ruby.hash_new();
 
-    hash.aset(ruby.to_symbol("timestamp_ms"), id.timestamp().saturating_add(offset))?;
+    hash.aset(ruby.to_symbol("timestamp_ms"), state.timestamp_ms(id))?;
     hash.aset(ruby.to_symbol("machine_id"), id.instance())?;
     hash.aset(ruby.to_symbol("sequence"), id.sequence())?;
 
@@ -82,10 +91,10 @@ fn parse(ruby: &Ruby, id: u64) -> Result<RHash, Error> {
 }
 
 fn timestamp_ms(ruby: &Ruby, id: u64) -> Result<u64, Error> {
-    epoch_offset(ruby).map(|offset| id.timestamp().saturating_add(offset))
+    current_state(ruby).map(|state| state.timestamp_ms(id))
 }
 
-fn machine_id_from_id(id: u64) -> u64 {
+fn machine_id(id: u64) -> u64 {
     id.instance()
 }
 
@@ -93,47 +102,42 @@ fn sequence(id: u64) -> u64 {
     id.sequence()
 }
 
-fn is_initialized() -> bool {
-    STATE.load().as_ref().is_some_and(|s| s.init_pid == std::process::id())
+fn is_clock_panic(payload: &(dyn Any + Send)) -> bool {
+    let message = payload.downcast_ref::<&str>().copied().or_else(|| payload.downcast_ref::<String>().map(String::as_str));
+
+    message.is_some_and(|message| CLOCK_PANIC_MESSAGES.iter().any(|needle| message.contains(needle)))
 }
 
-// The generator panics when the clock steps backwards; generate() catches it
-// and raises a Ruby error, but the default panic hook would still print a
-// message and backtrace to stderr on every call. Silence only that panic.
+/// `generate` turns the clock-backwards panic into a Ruby error, but the default
+/// hook would still print a message and backtrace to stderr on every call.
 fn install_panic_hook() {
-    let prev = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        let clock_panic = info
-            .payload()
-            .downcast_ref::<&str>()
-            .copied()
-            .or_else(|| info.payload().downcast_ref::<String>().map(String::as_str))
-            .is_some_and(|msg| msg.contains("Clock has moved backwards") || msg.contains("clock went backwards"));
+    let default_hook = panic::take_hook();
 
-        if !clock_panic {
-            prev(info);
+    panic::set_hook(Box::new(move |info| {
+        if !is_clock_panic(info.payload()) {
+            default_hook(info);
         }
     }));
 }
 
 #[magnus::init]
 fn init(ruby: &Ruby) -> Result<(), Error> {
-    unsafe {
-        rb_sys::rb_ext_ractor_safe(true);
-    }
+    // SAFETY: Ruby calls `init` exactly once while loading the extension, on the
+    // main Ractor, before any method below can run. This is what `RB_EXT_RACTOR_SAFE`
+    // expands to in a C extension; magnus has no safe wrapper for it.
+    unsafe { rb_sys::rb_ext_ractor_safe(true) };
 
     install_panic_hook();
 
-    let module = ruby.define_module("Snowflaked")?;
-    let internal = module.define_module("Native")?;
+    let native = ruby.define_module("Snowflaked")?.define_module("Native")?;
 
-    internal.define_singleton_method("init_generator", function!(init_generator, 2))?;
-    internal.define_singleton_method("generate", function!(generate, 0))?;
-    internal.define_singleton_method("parse", function!(parse, 1))?;
-    internal.define_singleton_method("timestamp_ms", function!(timestamp_ms, 1))?;
-    internal.define_singleton_method("machine_id", function!(machine_id_from_id, 1))?;
-    internal.define_singleton_method("sequence", function!(sequence, 1))?;
-    internal.define_singleton_method("initialized?", function!(is_initialized, 0))?;
+    native.define_singleton_method("init_generator", function!(init_generator, 2))?;
+    native.define_singleton_method("generate", function!(generate, 0))?;
+    native.define_singleton_method("parse", function!(parse, 1))?;
+    native.define_singleton_method("timestamp_ms", function!(timestamp_ms, 1))?;
+    native.define_singleton_method("machine_id", function!(machine_id, 1))?;
+    native.define_singleton_method("sequence", function!(sequence, 1))?;
+    native.define_singleton_method("initialized?", function!(is_initialized, 0))?;
 
     Ok(())
 }
