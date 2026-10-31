@@ -377,6 +377,7 @@ name = "snowflaked"
 version = "0.3.0"
 dependencies = [
  "arc-swap",
+ "libc",
  "magnus",
  "rb-sys",
  "snowflaked 1.0.4",

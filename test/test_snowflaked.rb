@@ -296,6 +296,56 @@ class TestSnowflaked < ActiveSupport::TestCase
     assert_raises(Snowflaked::ConfigurationError) { config.epoch = Time.now.utc + 3600 }
   end
 
+  def test_pre_unix_epoch_raises
+    config = Snowflaked::Configuration.new
+
+    assert_raises(Snowflaked::ConfigurationError) { config.epoch = Time.utc(1960, 1, 1) }
+  end
+
+  def test_string_epoch_raises
+    config = Snowflaked::Configuration.new
+
+    assert_raises(Snowflaked::ConfigurationError) { config.epoch = "2024-01-01" }
+  end
+
+  def test_time_with_zone_epoch_is_accepted
+    config = Snowflaked::Configuration.new
+    config.epoch = Time.zone.local(2024, 1, 1)
+
+    assert_equal 1_704_067_200_000, config.epoch_ms
+  end
+
+  def test_failed_native_init_does_not_seal_configuration # rubocop:disable Metrics/MethodLength
+    error, repaired = fork_and_collect do
+      Snowflaked.instance_variable_set(:@configuration, Snowflaked::Configuration.new)
+      Snowflaked.configuration.instance_variable_set(:@epoch, Time.utc(1960, 1, 1))
+
+      error = begin
+        Snowflaked.id
+        nil
+      rescue StandardError => e
+        e.class.name
+      end
+
+      Snowflaked.configuration.epoch = Time.utc(2024, 1, 1)
+      [error, Snowflaked.id.positive?]
+    end
+
+    assert_equal "RangeError", error
+    assert repaired, "configuration must stay open after a failed native init"
+  end
+
+  def test_out_of_range_machine_id_reaching_native_raises_argument_error
+    error, = fork_and_collect do
+      Snowflaked::Native.init_generator(Snowflaked::MAX_MACHINE_ID + 1, nil)
+      ["no error"]
+    rescue ArgumentError => e
+      [e.message]
+    end
+
+    assert_match(/machine_id must be between 0 and 1023, got 1024/, error)
+  end
+
   def test_epoch_cannot_change_after_configuration_is_sealed
     epoch = Time.utc(2024, 1, 1)
     config = Snowflaked::Configuration.new

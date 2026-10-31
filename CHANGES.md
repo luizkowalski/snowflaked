@@ -2,6 +2,11 @@
 
 ## main
 
+- fix: a failed native init (bad `machine_id` or `epoch`) no longer seals the configuration, so the error can be corrected without a restart
+- fix: `epoch` must be a `Time` (or `TimeWithZone`) between 1970-01-01 and now. Strings and pre-1970 values raise `ConfigurationError` instead of being silently read as a Rational or failing with `RangeError`
+- fix: an out-of-range `machine_id` reaching the native extension raises `ArgumentError` instead of a non-rescuable `fatal`
+- perf: fork detection moved to a `pthread_atfork` handler, so `Snowflaked.id` no longer calls `getpid` twice per ID. `parse` uses cached static symbols
+- docs: note the 41-bit timestamp lifetime: `epoch = nil` wraps on 2039-09-07, the default epoch on 2093-09-06
 - fix: mark the native extension Ractor-safe (`rb_ext_ractor_safe`), so `Snowflaked.id` and the other readers work from a non-main Ractor instead of raising `Ractor::UnsafeError`. Set up the gem on the main Ractor first, as documented
 - fix: generate IDs in `before_create` instead of `before_validation`, so `save(validate: false)` gets IDs; `insert_all`/`upsert_all` still skip generation (documented). IDs are no longer available during validations
 - fix: validate that `epoch` is a time-like value in the past; `epoch = nil` (Unix epoch) remains supported

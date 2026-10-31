@@ -12,3 +12,4 @@ magnus = "0.9"
 rb-sys = "0.9"
 snowflaked = { version = "1.0.3", features = ["sync"] }
 arc-swap = "1.9.1"
+libc = "0.2"
