@@ -90,6 +90,9 @@ Snowflaked.configure do |config|
 end
 ```
 
+> [!WARNING]
+> The timestamp field holds 41 bits of milliseconds, about 69.7 years from the epoch. With the default epoch IDs wrap on 2093-09-06. With `epoch = nil` (the Unix epoch, the pre-0.3.0 default) they wrap on 2039-09-07. After the wrap new IDs restart near zero: they stay unique against existing rows but no longer sort after them, and `Snowflaked.timestamp` returns 1970 dates.
+
 Configuration locks after you call `Snowflaked.configure`, or after the first generated or parsed ID. Set your configuration during application boot. Do this before you start request threads.
 
 If you use Ractors, set your configuration before you start any other Ractor. See [Ractor Safety](#ractor-safety) below for the reason.
