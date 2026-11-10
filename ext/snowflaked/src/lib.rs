@@ -40,14 +40,13 @@ struct GeneratorState {
 }
 
 impl GeneratorState {
-    fn new(ruby: &Ruby, machine_id: u16, epoch_ms: u64, generation: u64) -> Result<Self, Error> {
-        let builder = Builder::new()
-            .instance_checked(machine_id)
-            .ok_or_else(|| Error::new(ruby.exception_arg_error(), format!("machine_id must be between 0 and {MAX_MACHINE_ID}, got {machine_id}")))?;
+    fn try_new(machine_id: u16, epoch_ms: u64) -> Option<Self> {
+        let builder = Builder::new().instance_checked(machine_id)?;
         let epoch = UNIX_EPOCH + Duration::from_millis(epoch_ms);
         let generator = builder.epoch(epoch).build();
+        let generation = FORK_GENERATION.load(Ordering::Relaxed);
 
-        Ok(Self { generator, epoch_ms, generation })
+        Some(Self { generator, epoch_ms, generation })
     }
 
     fn is_current(&self) -> bool {
@@ -72,11 +71,12 @@ fn init_generator(ruby: &Ruby, machine_id: u16, epoch_ms: Option<u64>) -> Result
         return Ok(false);
     }
 
-    let generation = FORK_GENERATION.load(Ordering::Relaxed);
-    let new_state = Arc::new(GeneratorState::new(ruby, machine_id, epoch_ms.unwrap_or(0), generation)?);
+    let new_state = GeneratorState::try_new(machine_id, epoch_ms.unwrap_or(0))
+        .map(Arc::new)
+        .ok_or_else(|| Error::new(ruby.exception_arg_error(), format!("machine_id must be between 0 and {MAX_MACHINE_ID}, got {machine_id}")))?;
 
     STATE.rcu(|current| match current {
-        Some(current) if current.generation == generation => Arc::clone(current),
+        Some(current) if current.is_current() => Arc::clone(current),
         _ => Arc::clone(&new_state),
     });
 
@@ -93,17 +93,17 @@ fn with_state<T>(ruby: &Ruby, f: impl FnOnce(&GeneratorState) -> T) -> Result<T,
 }
 
 fn generate(ruby: &Ruby) -> Result<i64, Error> {
-    with_state(ruby, |state| panic::catch_unwind(|| state.generator.generate::<i64>()))?
-        .map_err(|_| Error::new(ruby.exception_runtime_error(), "Snowflaked: system clock moved backwards; cannot generate a monotonic ID"))
+    let generated = with_state(ruby, |state| panic::catch_unwind(|| state.generator.generate::<i64>()))?;
+
+    generated.map_err(|_| Error::new(ruby.exception_runtime_error(), "Snowflaked: system clock moved backwards; cannot generate a monotonic ID"))
 }
 
 fn parse(ruby: &Ruby, id: u64) -> Result<RHash, Error> {
-    let timestamp_ms = with_state(ruby, |state| state.timestamp_ms(id))?;
     let hash = ruby.hash_new();
 
-    hash.aset(ruby.get_inner(&TIMESTAMP_MS), timestamp_ms)?;
-    hash.aset(ruby.get_inner(&MACHINE_ID), id.instance())?;
-    hash.aset(ruby.get_inner(&SEQUENCE), id.sequence())?;
+    hash.aset(ruby.get_inner(&TIMESTAMP_MS), timestamp_ms(ruby, id)?)?;
+    hash.aset(ruby.get_inner(&MACHINE_ID), machine_id(id))?;
+    hash.aset(ruby.get_inner(&SEQUENCE), sequence(id))?;
 
     Ok(hash)
 }
