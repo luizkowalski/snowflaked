@@ -12,8 +12,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - id: rust
+        run: echo "version=$(yq -p toml -oy '.tools.rust.version' mise.toml)" >> "$GITHUB_OUTPUT"
       - uses: oxidize-rb/actions/setup-ruby-and-rust@v1
         with:
+          rustup-toolchain: ${{ steps.rust.outputs.version }}
           bundler-cache: true
           cargo-cache: true
 
@@ -65,8 +68,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+      - id: rust
+        run: echo "version=$(yq -p toml -oy '.tools.rust.version' mise.toml)" >> "$GITHUB_OUTPUT"
       - uses: oxidize-rb/actions/setup-ruby-and-rust@v1
         with:
+          rustup-toolchain: ${{ steps.rust.outputs.version }}
           bundler-cache: true
           cargo-cache: true
           ruby-version: ${{ matrix.ruby }}
